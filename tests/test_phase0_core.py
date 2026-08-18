@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -9,6 +10,7 @@ from anki_alive.core.focus import FocusPolicy
 from anki_alive.core.reconciliation import ReversibleReviewCounter
 from anki_alive.core.review import ReviewObservation, ReviewReversed, new_observation
 from anki_alive.core.time import FixedClock, local_study_date
+from anki_alive.integration.hooks import AnkiHookRuntime
 from anki_alive.integration.profile import load_or_create_profile_key
 from anki_alive.integration.reviewer import ReviewObserver, SourceReview
 from anki_alive.performance import PerformanceTimer
@@ -223,3 +225,56 @@ def test_performance_timer_records_named_sample() -> None:
     assert len(samples) == 1
     assert samples[0].name == "review-hook"
     assert samples[0].duration_ms >= 0
+
+
+def test_anki_hook_registration_is_idempotent_and_normalizes_review() -> None:
+    with TemporaryDirectory() as temporary_directory:
+        class FakeDb:
+            def __init__(self) -> None:
+                self.review_exists = True
+
+            def first(self, sql: str, card_id: int):
+                assert "revlog" in sql
+                return (1_776_000_000_123, card_id, 3, 820)
+
+            def scalar(self, sql: str, review_id: int):
+                assert "revlog" in sql
+                return 1 if self.review_exists else None
+
+        db = FakeDb()
+        collection = SimpleNamespace(db=db)
+        hooks = SimpleNamespace(
+            collection_did_load=[],
+            profile_will_close=[],
+            reviewer_did_answer_card=[],
+            state_did_undo=[],
+        )
+        mw = SimpleNamespace(
+            pm=SimpleNamespace(profileFolder=lambda: temporary_directory),
+        )
+        bus = EventBus()
+        observations: list[ReviewObservation] = []
+        reversals: list[ReviewReversed] = []
+        bus.subscribe(ReviewObservation, observations.append)
+        bus.subscribe(ReviewReversed, reversals.append)
+
+        runtime = AnkiHookRuntime(mw=mw, gui_hooks=hooks, event_bus=bus)
+        runtime.register()
+        runtime.register()
+        assert len(hooks.collection_did_load) == 1
+        assert len(hooks.reviewer_did_answer_card) == 1
+        assert len(hooks.state_did_undo) == 1
+
+        hooks.collection_did_load[0](collection)
+        hooks.reviewer_did_answer_card[0](object(), SimpleNamespace(id=42), 3)
+        assert len(observations) == 1
+        assert observations[0].source_review_id == 1_776_000_000_123
+        assert observations[0].response_time_ms == 820
+
+        hooks.state_did_undo[0](object())
+        assert reversals == []
+
+        db.review_exists = False
+        hooks.state_did_undo[0](object())
+        assert len(reversals) == 1
+        assert reversals[0].source_review_id == observations[0].source_review_id
