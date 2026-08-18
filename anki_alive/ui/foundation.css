@@ -1,0 +1,103 @@
+:root {
+  color-scheme: light dark;
+
+  --aa-space-1: 4px;
+  --aa-space-2: 8px;
+  --aa-space-3: 12px;
+  --aa-space-4: 16px;
+  --aa-space-5: 24px;
+  --aa-space-6: 32px;
+  --aa-space-7: 48px;
+
+  --aa-radius-sm: 8px;
+  --aa-radius-md: 12px;
+  --aa-radius-lg: 16px;
+  --aa-radius-xl: 20px;
+
+  --aa-bg-canvas: #111217;
+  --aa-bg-surface: #181a22;
+  --aa-bg-elevated: #20232d;
+  --aa-bg-overlay: #292d39;
+
+  --aa-text-primary: #f4f5f7;
+  --aa-text-secondary: #c6cad3;
+  --aa-text-tertiary: #979eab;
+
+  --aa-line-subtle: rgba(255, 255, 255, 0.08);
+  --aa-line-default: rgba(255, 255, 255, 0.16);
+  --aa-line-strong: rgba(255, 255, 255, 0.28);
+
+  --aa-accent-expedition: #c8a96b;
+  --aa-accent-oracle: #9bd5e8;
+  --aa-accent-rescue: #78c8bb;
+  --aa-accent-nemesis: #a35b72;
+  --aa-accent-fragment: #b5a1d6;
+  --aa-accent-relic: #d5bd82;
+  --aa-accent-world: #79aaa7;
+
+  --aa-focus-ring: 0 0 0 3px rgba(155, 213, 232, 0.45);
+  --aa-motion-micro: 120ms;
+  --aa-motion-standard: 200ms;
+  --aa-motion-reveal: 350ms;
+}
+
+.anki-alive {
+  color: var(--aa-text-primary);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  line-height: 1.45;
+}
+
+.anki-alive :focus-visible {
+  outline: 2px solid var(--aa-accent-oracle);
+  outline-offset: 2px;
+  box-shadow: var(--aa-focus-ring);
+}
+
+.anki-alive [data-status]::before {
+  content: attr(data-status-label);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.anki-alive[data-focus-mode="true"] {
+  --aa-motion-micro: 0ms;
+  --aa-motion-standard: 0ms;
+  --aa-motion-reveal: 0ms;
+}
+
+.anki-alive[data-focus-mode="true"] [data-ambient="true"],
+.anki-alive[data-focus-mode="true"] [data-nonessential="true"] {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anki-alive,
+  .anki-alive * {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --aa-bg-canvas: #f5f5f3;
+    --aa-bg-surface: #ffffff;
+    --aa-bg-elevated: #f0f0ed;
+    --aa-bg-overlay: #e7e7e2;
+    --aa-text-primary: #1c1d22;
+    --aa-text-secondary: #4b4f59;
+    --aa-text-tertiary: #6f7580;
+    --aa-line-subtle: rgba(20, 22, 28, 0.08);
+    --aa-line-default: rgba(20, 22, 28, 0.16);
+    --aa-line-strong: rgba(20, 22, 28, 0.28);
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "appearance": {
+    "theme": "system"
+  },
+  "motion": {
+    "reduced_motion": false
+  },
+  "focus_mode": {
+    "enabled": false
+  },
+  "diagnostics": {
+    "enabled": false
+  },
+  "feature_flags": {}
+}
