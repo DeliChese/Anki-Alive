@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .model import CheckpointStatus, Expedition, ExpeditionCheckpoint
+from .model import CheckpointStatus, Expedition, ExpeditionCheckpoint, ExpeditionStatus
 
 
 @dataclass(frozen=True)
@@ -24,6 +24,7 @@ class ExpeditionView:
     total_checkpoints: int
     next_checkpoint_target: int | None
     reviews_to_next_checkpoint: int | None
+    closed_before_target: bool
 
 
 def build_expedition_view(
@@ -33,6 +34,9 @@ def build_expedition_view(
     target = expedition.target_reviews
     completed = expedition.completed_reviews
     progress_percent = min(100.0, max(0.0, completed * 100.0 / target))
+    closed_before_target = (
+        expedition.status is ExpeditionStatus.COMPLETED and completed < target
+    )
 
     first_pending_target: int | None = None
     checkpoint_views: list[CheckpointView] = []
@@ -43,6 +47,8 @@ def build_expedition_view(
         if is_reached:
             reached += 1
             state = "reached"
+        elif closed_before_target:
+            state = "future"
         elif first_pending_target is None:
             first_pending_target = checkpoint.target_progress
             state = "nearby"
@@ -76,4 +82,5 @@ def build_expedition_view(
         total_checkpoints=len(checkpoint_views),
         next_checkpoint_target=first_pending_target,
         reviews_to_next_checkpoint=reviews_to_next,
+        closed_before_target=closed_before_target,
     )

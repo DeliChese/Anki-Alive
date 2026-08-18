@@ -62,6 +62,7 @@ class FakeMw:
         self.pm = SimpleNamespace(profileFolder=lambda: profile_folder)
         self.col = FakeCollection()
         self.web = FakeWeb()
+        self.reviewer = SimpleNamespace(card=object())
         self.state = "deckBrowser"
         self.transitions: list[str] = []
 
@@ -360,8 +361,8 @@ def test_undo_after_completion_invalidates_stale_summary(tmp_path: Path) -> None
     database.close()
 
 
-def test_leaving_reviewer_pauses_active_expedition(tmp_path: Path) -> None:
-    database, _bus, service, _presentations, _settings, hooks, _mw, deck_browser, _flush = (
+def test_leaving_reviewer_with_card_pauses_active_expedition(tmp_path: Path) -> None:
+    database, _bus, service, _presentations, _settings, hooks, mw, deck_browser, _flush = (
         make_runtime(tmp_path, due=5)
     )
     hooks.webview_did_receive_js_message[0](
@@ -373,12 +374,60 @@ def test_leaving_reviewer_pauses_active_expedition(tmp_path: Path) -> None:
         "SELECT expedition_id FROM expeditions LIMIT 1"
     ).fetchone()
     expedition_id = UUID(row[0])
+    assert mw.reviewer.card is not None
 
     hooks.reviewer_will_end[0]()
 
     paused = service.get(expedition_id)
     assert paused is not None
     assert paused.status is ExpeditionStatus.PAUSED
+    database.close()
+
+
+def test_natural_queue_exhaustion_closes_without_moving_target(tmp_path: Path) -> None:
+    (
+        database,
+        _bus,
+        service,
+        presentations,
+        _settings,
+        hooks,
+        mw,
+        deck_browser,
+        flush,
+    ) = make_runtime(tmp_path, due=5)
+    hooks.webview_did_receive_js_message[0](
+        (False, None),
+        "anki-alive:expedition:begin",
+        deck_browser,
+    )
+    row = database.connection.execute(
+        "SELECT profile_key, expedition_id FROM expeditions LIMIT 1"
+    ).fetchone()
+    profile_key = row[0]
+    expedition_id = UUID(row[1])
+
+    mw.reviewer.card = None
+    hooks.reviewer_will_end[0]()
+    mw.state = "overview"
+    flush()
+
+    closed = service.get(expedition_id)
+    assert closed is not None
+    assert closed.status is ExpeditionStatus.COMPLETED
+    assert closed.completed_reviews == 0
+    assert closed.target_reviews == 5
+    assert mw.state == "deckBrowser"
+    assert presentations.pending_for_profile(
+        profile_key,
+        kind="expedition.completion",
+    ) is not None
+
+    completion = FakeWebContent()
+    hooks.webview_will_set_content[0](completion, deck_browser)
+    assert "The available route is complete." in completion.body
+    assert "planned target stayed 5" in completion.body
+    assert "no eligible reviews left" in completion.body
     database.close()
 
 

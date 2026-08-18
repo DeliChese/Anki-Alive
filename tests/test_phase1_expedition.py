@@ -169,3 +169,24 @@ def test_only_one_resumable_expedition_exists_per_profile() -> None:
         second = service.plan(profile_key="profile-a", target_reviews=20)
         assert second.expedition_id != first.expedition_id
         database.close()
+
+
+def test_queue_exhaustion_closes_without_changing_the_planned_target() -> None:
+    with TemporaryDirectory() as temporary_directory:
+        database = Database(Path(temporary_directory) / "anki_alive.sqlite3")
+        database.open()
+        bus, service = make_service(database)
+        expedition = service.plan(profile_key="profile-a", target_reviews=5)
+        service.start(expedition.expedition_id)
+        completed: list[ExpeditionCompleted] = []
+        bus.subscribe(ExpeditionCompleted, completed.append)
+
+        closed = service.complete_exhausted(expedition.expedition_id)
+
+        assert closed.status is ExpeditionStatus.COMPLETED
+        assert closed.completed_reviews == 0
+        assert closed.target_reviews == 5
+        assert len(completed) == 1
+        assert completed[0].completed_reviews == 0
+        assert completed[0].target_reviews == 5
+        database.close()

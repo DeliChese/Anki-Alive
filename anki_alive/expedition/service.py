@@ -71,13 +71,6 @@ class ExpeditionService:
         *,
         preferred_reviews: int = DEFAULT_EXPEDITION_TARGET,
     ) -> int:
-        """Return a bounded provisional Phase 1 target.
-
-        The exact sizing policy remains intentionally provisional. This first
-        implementation chooses a standard ceiling and clamps it to work that is
-        currently available. Once created, the Expedition target never drifts.
-        """
-
         if available_reviews <= 0:
             raise ValueError("available_reviews must be positive")
         if preferred_reviews <= 0:
@@ -198,6 +191,34 @@ class ExpeditionService:
                 expedition_id=updated.expedition_id,
                 completed_reviews=updated.completed_reviews,
                 target_reviews=updated.target_reviews,
+            )
+        )
+        return updated
+
+    def complete_exhausted(self, expedition_id: UUID) -> Expedition:
+        """Close an active route when Anki proves no eligible review remains.
+
+        The original target stays fixed. A lower completed count therefore
+        records truthful queue exhaustion rather than silently moving the goal.
+        """
+
+        expedition = self._require_status(
+            expedition_id,
+            {ExpeditionStatus.ACTIVE},
+            "complete exhausted",
+        )
+        if expedition.completed_reviews >= expedition.target_reviews:
+            raise ValueError("target-reached Expedition should complete through review progress")
+        updated = self.repository.set_status(
+            expedition.expedition_id,
+            ExpeditionStatus.COMPLETED,
+            self.clock.now_utc(),
+        )
+        self.event_bus.publish(
+            ExpeditionCompleted(
+                updated.expedition_id,
+                updated.completed_reviews,
+                updated.target_reviews,
             )
         )
         return updated

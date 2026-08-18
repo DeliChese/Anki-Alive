@@ -47,7 +47,9 @@ def _checkpoint_nodes(view: ExpeditionView) -> str:
 def render_expedition_track(view: ExpeditionView, *, compact: bool = False) -> str:
     compact_class = " aa-expedition-track--compact" if compact else ""
     next_text = (
-        "Route complete"
+        "Route closed"
+        if view.closed_before_target
+        else "Route complete"
         if view.reviews_to_next_checkpoint is None
         else f"{view.reviews_to_next_checkpoint} to next checkpoint"
     )
@@ -116,13 +118,24 @@ def render_today(
 
     if completed_summary is not None:
         summary_view = build_expedition_view(completed_summary, completed_checkpoints)
+        if summary_view.closed_before_target:
+            completion_heading = "The available route is complete."
+            completion_copy = (
+                f"{summary_view.completed_reviews} reviews completed. "
+                f"The planned target stayed {summary_view.target_reviews}; "
+                "Anki had no eligible reviews left in this study context."
+            )
+        else:
+            completion_heading = "The route is complete."
+            completion_copy = (
+                f"{summary_view.target_reviews} reviews completed across "
+                f"{summary_view.total_checkpoints} checkpoints. "
+                "The finish line stays finished."
+            )
         expedition_content = f"""
           <p class="aa-type-ritual">EXPEDITION COMPLETE</p>
-          <h2 class="aa-type-h2">The route is complete.</h2>
-          <p class="aa-type-body aa-copy-muted">
-            {summary_view.target_reviews} reviews completed across
-            {summary_view.total_checkpoints} checkpoints. The finish line stays finished.
-          </p>
+          <h2 class="aa-type-h2">{completion_heading}</h2>
+          <p class="aa-type-body aa-copy-muted">{completion_copy}</p>
           {render_expedition_track(summary_view)}
           <div class="aa-action-row">
             <button class="aa-button aa-button--primary"

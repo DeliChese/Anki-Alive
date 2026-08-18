@@ -337,11 +337,19 @@ class ExpeditionUiRuntime:
     def _on_reviewer_will_end(self) -> None:
         try:
             expedition = self._expedition.resumable(self._profile_key())
-            if expedition is not None and expedition.status is ExpeditionStatus.ACTIVE:
+            if expedition is None or expedition.status is not ExpeditionStatus.ACTIVE:
+                return
+
+            reviewer = getattr(self._mw, "reviewer", None)
+            missing_card = object()
+            current_card = getattr(reviewer, "card", missing_card)
+            if reviewer is not None and current_card is None:
+                self._expedition.complete_exhausted(expedition.expedition_id)
+            else:
                 self._expedition.pause(expedition.expedition_id)
         except Exception as error:
             self._diagnostics.emit(
-                "expedition_pause_error",
+                "expedition_reviewer_end_error",
                 error_type=type(error).__name__,
             )
 
@@ -410,7 +418,7 @@ class ExpeditionUiRuntime:
         self._flush_scheduled = False
         for event in self._orchestrator.take_boundary():
             if event.kind == "expedition.completion":
-                if getattr(self._mw, "state", None) == "review":
+                if getattr(self._mw, "state", None) in {"review", "overview"}:
                     self._mw.moveToState("deckBrowser")
                 continue
 
