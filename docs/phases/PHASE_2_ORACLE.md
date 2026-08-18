@@ -1,4 +1,4 @@
-# PHASE_2_ORACLE.md
+ # PHASE_2_ORACLE.md
 
 # Anki Alive — Phase 2: Oracle
 
