@@ -35,16 +35,11 @@ class AnkiHookRuntime:
     def register(self) -> None:
         if self._registered:
             return
-        self._append_once(self._gui_hooks.collection_did_load, self._on_collection_loaded)
-        self._append_once(self._gui_hooks.profile_will_close, self._on_profile_will_close)
-        self._append_once(self._gui_hooks.reviewer_did_answer_card, self._on_answered)
-        self._append_once(self._gui_hooks.state_did_undo, self._on_undo)
+        self._gui_hooks.collection_did_load.append(self._on_collection_loaded)
+        self._gui_hooks.profile_will_close.append(self._on_profile_will_close)
+        self._gui_hooks.reviewer_did_answer_card.append(self._on_answered)
+        self._gui_hooks.state_did_undo.append(self._on_undo)
         self._registered = True
-
-    @staticmethod
-    def _append_once(hook: Any, handler: Any) -> None:
-        if handler not in hook:
-            hook.append(handler)
 
     def _measure(self, name: str) -> ContextManager[None]:
         if self._performance is None:
