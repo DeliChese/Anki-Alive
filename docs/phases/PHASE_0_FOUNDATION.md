@@ -13,12 +13,16 @@ Phase 0 is complete only when the project can safely observe Anki review flow, p
 ## 2. Status
 
 ```text
-Status: NOT STARTED
+Status: IN PROGRESS — REAL ANKI HOST VALIDATION PENDING
 Phase: 0
 Name: Foundation
 Depends on: Starter Packs + Cross-Phase Audit
 Next: Phase 1 — Expedition
 ```
+
+Current implementation is tracked in Draft PR #1 on `phase-0/foundation`.
+
+Automated foundation tests pass in GitHub Actions. Phase 1 durable review-derived progress remains blocked until the manual real-Anki review/undo test and reviewer timing validation are completed.
 
 ---
 
@@ -178,23 +182,21 @@ SessionCoordinator = runtime coordination
 
 ## 7. Review Observation Blocker
 
-Before Phase 1 durable progress is allowed, Phase 0 must validate:
+Source validation has resolved the intended mapping:
 
-- what hook means a grade is accepted,
-- whether stable source review identity is available,
-- how undo is surfaced,
-- whether duplicate hooks can occur,
-- how restart affects event identity.
+- accepted grade notification: `gui_hooks.reviewer_did_answer_card`,
+- source review identity: Anki `revlog.id`,
+- deterministic add-on observation identity: `(profile_key, revlog.id)`,
+- undo notification: `gui_hooks.state_did_undo`,
+- reversal proof: tracked revlog row disappears after undo.
 
-This is a Phase 0 blocker.
+Fake-host integration tests cover this path. Real Anki confirmation remains mandatory before Phase 1 durable progress is allowed.
 
 ---
 
 ## 8. Reconciliation Proof
 
-Phase 0 must demonstrate at least one safe reversible derived state in tests or test harness.
-
-Example test-only state:
+Phase 0 demonstrates a safe reversible test projection:
 
 ```text
 accepted review
@@ -203,7 +205,7 @@ accepted review
 → derived state returns to correct value
 ```
 
-This proves architecture before features depend on it.
+The implementation is deliberately test-only foundation state, not future gameplay state.
 
 ---
 
@@ -218,11 +220,22 @@ migration_history
 
 Do not pre-create feature tables.
 
+Sidecar database strategy is now:
+
+- WAL,
+- foreign keys,
+- 5-second busy timeout,
+- explicit transactions,
+- integrity check,
+- online backup API,
+- WAL checkpoint on close,
+- storage under `user_files`.
+
 ---
 
 ## 10. Shared Service Seams
 
-Phase 0 should make clean future seams for:
+Phase 0 maintains clean future seams for:
 
 ```text
 EventOrchestrator
@@ -239,11 +252,12 @@ Do not instantiate unnecessary complexity yet.
 
 ## 11. Profile Identity
 
-Resolve a stable profile/collection scoping strategy.
+Resolved strategy:
 
-Do not use display name alone.
-
-All future durable feature state depends on this decision.
+- create an Anki Alive owned UUID inside the active profile folder,
+- do not use display name as identity,
+- allow profile-folder rename to carry the identity with it,
+- include profile key when deriving normalized review identity.
 
 ---
 
@@ -257,19 +271,15 @@ Typical < 10 ms
 P95 < 20 ms
 ```
 
-Phase 0 must measure baseline hook overhead.
+`PerformanceTimer` now wraps the concrete accepted-review and undo hook paths. Real-host diagnostics will provide the Phase 0 baseline.
 
-Important:
-
-Future features will accumulate cost.
-
-Architecture should therefore prefer aggregated context and coordinated writes over per-feature hot-path I/O.
+Future features must prefer aggregated context and coordinated writes over per-feature hot-path I/O.
 
 ---
 
 ## 13. UI / Focus Foundation
 
-Focus Policy should support concepts such as:
+Focus Policy supports:
 
 ```text
 allow_major_reveal
@@ -279,48 +289,50 @@ show_compact_progress
 defer_nonessential_events
 ```
 
-Public UI may initially expose only a simple toggle.
+Semantic CSS tokens, visible focus, Focus Mode presentation rules, and reduced-motion rules exist. No frontend framework is introduced in Phase 0.
 
 ---
 
 ## 14. Accessibility Baseline
 
-Required:
+Required and represented in the Phase 0 foundation:
 
 - keyboard-friendly controls,
 - visible focus,
 - reduced motion,
 - non-color semantics,
-- readable contrast,
-- scalable text.
+- readable contrast roles,
+- scalable text direction.
+
+Real feature screens will receive feature-specific accessibility validation in later phases.
 
 ---
 
-## 15. Open Technical Questions
+## 15. Technical Questions Status
 
 ### Q0-01 — Minimum Supported Anki Version
-BLOCKER FOR COMPATIBILITY.
+RESOLVED PROVISIONALLY: Anki 25.02.7 (`250207`) or newer. Real-host confirmation pending.
 
 ### Q0-02 — Review Hook Mapping
-BLOCKER.
+RESOLVED IN SOURCE + AUTOMATED INTEGRATION TEST: `reviewer_did_answer_card`.
 
 ### Q0-03 — Undo/Reversal Identity
-BLOCKER FOR PHASE 1.
+RESOLVED IN SOURCE + AUTOMATED INTEGRATION TEST: `state_did_undo` triggers reconciliation; reversal requires verified revlog disappearance. Real-host confirmation pending.
 
 ### Q0-04 — Frontend Stack
-DECIDE FROM ACTUAL UI NEED.
+RESOLVED FOR PHASE 0: host-compatible HTML/CSS primitives, no framework yet.
 
 ### Q0-05 — SQLite Strategy
-DECIDE AND TEST.
+RESOLVED AND AUTOMATED-TESTED: WAL + timeout + integrity + online backup + checkpoint-on-close.
 
 ### Q0-06 — Profile Identity
-BLOCKER FOR DURABLE STATE.
+RESOLVED AND AUTOMATED-TESTED: add-on UUID inside profile folder.
 
 ### Q0-07 — FSRS/Memory State Access
-DOCUMENT INTERFACE FOR LATER MEMORY ENGINE.
+DEFERRED INTERFACE VALIDATION TO MEMORY ENGINE WORK. No feature-specific FSRS logic belongs in Phase 0.
 
 ### Q0-08 — Safe Background Work
-VALIDATE BEFORE USING THREADS WITH HOST DATA.
+NO BACKGROUND HOST-DATA WORK INTRODUCED IN PHASE 0. Validate before later asynchronous host access.
 
 ---
 
@@ -340,21 +352,28 @@ VALIDATE BEFORE USING THREADS WITH HOST DATA.
 - load/save
 - invalid values
 - unknown keys
+- Anki add-on config adapter
 
 ### Persistence
 
 - fresh DB
 - reopen
-- migration order
+- migration state
 - rollback
 - schema version
+- WAL
+- busy timeout
+- integrity check
+- backup
 
 ### Integration
 
 - idempotent hook registration
 - normalized review observation
-- duplicate protection where possible
-- collection lifecycle
+- duplicate protection
+- collection/profile lifecycle
+- revlog-backed reversal verification
+- packaged compatibility metadata
 
 ### Reconciliation
 
@@ -363,31 +382,31 @@ VALIDATE BEFORE USING THREADS WITH HOST DATA.
 
 ### Performance
 
-- baseline reviewer hook timing
-- persistence timing
+- named timing samples in automated tests
+- concrete review/undo hooks instrumented for real-host measurement
 
 ---
 
 ## 17. Manual Anki Validation
 
-Minimum:
+Canonical checklist: `docs/PHASE0_MANUAL_VALIDATION.md`.
+
+Minimum real-host sequence:
 
 ```text
 1. Load add-on.
 2. Open profile/collection.
-3. Start review.
-4. Show question.
-5. Show answer.
-6. Grade cards with all buttons.
-7. Verify normalized review events.
-8. Undo accepted review.
-9. Verify reversal/reconciliation signal.
-10. Restart Anki.
-11. Verify storage and settings.
-12. Verify normal review remains unaffected.
+3. Review honestly across normal answer buttons.
+4. Verify normalized review diagnostics.
+5. Undo an accepted review.
+6. Verify reversal/reconciliation diagnostic.
+7. Restart Anki.
+8. Verify storage/settings survive.
+9. Verify normal review remains unaffected.
+10. Capture reviewer hook timing evidence.
 ```
 
-Record Anki version and OS.
+Record exact Anki version and OS.
 
 ---
 
@@ -395,27 +414,28 @@ Record Anki version and OS.
 
 Phase 0 is complete when:
 
-- [ ] repository implementation structure exists
-- [ ] bootstrap is safe/idempotent
-- [ ] integration boundary exists
-- [ ] EventBus exists
-- [ ] normalized ReviewObservation exists
-- [ ] undo/reversal mapping is documented
-- [ ] reconciliation foundation is proven
-- [ ] clock/IDs/local study day exist
-- [ ] settings service exists
-- [ ] Focus Policy exists
-- [ ] sidecar DB exists
-- [ ] schema version/migrations work
-- [ ] profile identity strategy is resolved
-- [ ] logs avoid card content by default
-- [ ] timing instrumentation exists
-- [ ] reviewer baseline is measured
-- [ ] UI tokens/reduced motion/focus baseline exist
-- [ ] test harness works
+- [x] repository implementation structure exists
+- [x] bootstrap is safe/idempotent by design and automated guards
+- [x] integration boundary exists
+- [x] EventBus exists
+- [x] normalized ReviewObservation exists
+- [x] undo/reversal mapping is documented
+- [x] reconciliation foundation is proven in automated tests
+- [x] clock/IDs/local study day exist
+- [x] settings service exists
+- [x] Focus Policy exists
+- [x] sidecar DB exists
+- [x] schema version/migrations work
+- [x] profile identity strategy is resolved
+- [x] logs avoid card content by default
+- [x] timing instrumentation exists
+- [ ] reviewer baseline is measured in real Anki
+- [x] UI tokens/reduced motion/focus baseline exist
+- [x] test harness works in GitHub Actions
 - [ ] manual Anki smoke test is completed
-- [ ] architecture/data/ADRs reflect actual implementation
-- [ ] `PHASE_0_FOUNDATION_HANDOFF.md` exists
+- [x] architecture/data/ADRs reflect current implementation direction
+- [x] `PHASE_0_FOUNDATION_HANDOFF.md` exists as a partial handoff
+- [ ] final handoff is promoted from PARTIAL to COMPLETE
 
 ---
 
@@ -431,6 +451,8 @@ Phase 1 may begin only when it can rely on:
 - settings/Focus Policy,
 - reviewer performance baseline,
 - EventOrchestrator-ready architecture.
+
+Real-host validation is the final Phase 0 gate before this contract is considered satisfied.
 
 ---
 
