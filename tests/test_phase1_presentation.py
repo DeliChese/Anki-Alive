@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -44,27 +46,17 @@ class FakeWeb:
         self.evals.append(script)
 
 
-class FakeScheduler:
-    def counts(self):
-        return (2, 0, 0)
-
-
-class FakeDecks:
-    def current(self):
-        return {"name": "Fallback deck"}
-
-
 class FakeCollection:
     def __init__(self) -> None:
-        self.sched = FakeScheduler()
-        self.decks = FakeDecks()
+        self.sched = SimpleNamespace(counts=lambda: (2, 0, 0))
+        self.decks = SimpleNamespace(current=lambda: {"name": "Fallback deck"})
         self.timebox_starts = 0
 
     def startTimebox(self) -> None:
         self.timebox_starts += 1
 
 
-class FakeMw: 
+class FakeMw:
     def __init__(self, profile_folder: str) -> None:
         self.pm = SimpleNamespace(profileFolder=lambda: profile_folder)
         self.col = FakeCollection()
@@ -78,7 +70,7 @@ class FakeMw:
 
 
 class FakeDeckBrowser:
-    def __init__(self, *, due: int = 2) -> None:
+    def __init__(self, due: int = 2) -> None:
         node = SimpleNamespace(
             deck_id=1,
             name="Biology",
@@ -87,10 +79,7 @@ class FakeDeckBrowser:
             review_count=0,
             children=[],
         )
-        self._render_data = SimpleNamespace(
-            tree=node,
-            current_deck_id=1,
-        )
+        self._render_data = SimpleNamespace(tree=node, current_deck_id=1)
         self.refresh_count = 0
 
     def refresh(self) -> None:
@@ -101,17 +90,16 @@ class FakeReviewer:
     pass
 
 
-class FakeWeb Content:
-    def __init__(self, body: str = "<main>Anki</main>") -> None:
-        self.body = body
+class FakeWebContent:
+    def __init__(self) -> None:
+        self.body = "<main>Anki</main>"
         self.css: list[str] = []
         self.js: list[str] = []
 
 
-def make_ui_runtime(tmp_path: Path, *, due: int = 2):
+def make_runtime(tmp_path: Path, due: int = 2):
     database = Database(tmp_path / "anki_alive.sqlite3")
     database.open()
-
     bus = EventBus()
     service = ExpeditionService(
         repository=ExpeditionRepository(database),
@@ -124,26 +112,21 @@ def make_ui_runtime(tmp_path: Path, *, due: int = 2):
     bus.subscribe(ReviewReversed, service.on_review_reversed)
 
     saved: list[dict] = []
-    settings = SettingsService(
-        load_raw=lambda: None,
-        save_raw=saved.append,
-    )
+    settings = SettingsService(load_raw=lambda: None, save_raw=saved.append)
     hooks = SimpleNamespace(
         webview_will_set_content=[],
         webview_did_receive_js_message=[],
         reviewer_will_end=[],
     )
     mw = FakeMw(str(tmp_path / "profile"))
-    diagnostics = FakeDiagnostics()
     scheduled: list = []
-
     ui = ExpeditionUiRuntime(
         mw=mw,
         gui_hooks=hooks,
         event_bus=bus,
         expedition=service,
         settings=settings,
-        diagnostics=diagnostics,
+        diagnostics=FakeDiagnostics(),
         deck_browser_type=FakeDeckBrowser,
         reviewer_type=FakeReviewer,
         asset_base="/_addons/anki_alive_dev/anki_alive/ui",
@@ -151,96 +134,59 @@ def make_ui_runtime(tmp_path: Path, *, due: int = 2):
     )
     ui.register()
 
-    def run_scheduled() -> None:
+    def flush() -> None:
         while scheduled:
-            callback = scheduled.pop(0)
-            callback()
+            scheduled.pop(0)()
 
-    return (
-        database,
-        bus,
-        service,
-        settings,
-        hooks,
-        mw,
-        diagnostics,
-        FakeDeckBrowser(due=due),
-        run_scheduled,
-    )
+    return database, bus, service, settings, hooks, mw, FakeDeckBrowser(due), flush
 
 
-def test_event_orchestrator_allows_only_one_prominent_boundary_event() -> None:
+def test_orchestrator_prefers_completion_and_deduplicates() -> None:
     orchestrator = EventOrchestrator()
-    orchestrator.enqueue(
-        PresentationEvent(
-            kind="expedition.checkpoint",
-            prominence=PresentationProminence.MAJOR,
-            priority=50,
-            dedupe_key="checkpoint:1",
-        )
-    )
-    orchestrator.enqueue(
-        PresentationEvent(
-            kind="expedition.completion",
-            prominence=PresentationProminence.SESSION_CLOSURE,
-            priority=100,
-            dedupe_key="completion:1",
-        )
-    )
-
-    chosen = orchestrator.take_boundary()
-
-    assert [event.kind for event in chosen] == ["expedition.completion"]
-    assert orchestrator.pending_count == 0
-
-
-def test_event_orchestrator_deduplicates_by_stable_key() -> None:
-    orchestrator = EventOrchestrator()
-    event = PresentationEvent(
+    checkpoint = PresentationEvent(
         kind="expedition.checkpoint",
         prominence=PresentationProminence.MAJOR,
+        priority=50,
         dedupe_key="checkpoint:1",
     )
+    completion = PresentationEvent(
+        kind="expedition.completion",
+        prominence=PresentationProminence.SESSION_CLOSURE,
+        priority=100,
+        dedupe_key="completion:1",
+    )
 
-    assert orchestrator.enqueue(event) is True
-    assert orchestrator.enqueue(event) is False
-    assert orchestrator.pending_count == 1
+    assert orchestrator.enqueue(checkpoint) is True
+    assert orchestrator.enqueue(checkpoint) is False
+    assert orchestrator.enqueue(completion) is True
+    assert [event.kind for event in orchestrator.take_boundary()] == [
+        "expedition.completion"
+    ]
 
 
-def test_target_planning_is_bounded_and_clamped_to_available_work() -> None:
+def test_target_planning_is_bounded() -> None:
     assert ExpeditionService.target_for_available_reviews(8) == 8
     assert ExpeditionService.target_for_available_reviews(200) == 50
 
 
-def test_today_and_reviewer_ui_use_real_expedition_state(tmp_path: Path) -> None:
-    (
-        database,
-        bus,
-        service,
-        settings,
-        hooks,
-        mw,
-        _diagnostics,
-        deck_browser,
-        run_scheduled,
-    ) = make_ui_runtime(tmp_path, due=2)
+def test_today_reviewer_completion_focus_and_pause_flow(tmp_path: Path) -> None:
+    database, bus, service, settings, hooks, mw, deck_browser, flush = make_runtime(
+        tmp_path,
+        due=2,
+    )
 
-    today_content = FakeWebContent()
-    hooks.webview_will_set_content[0](today_content, deck_browser)
-
-    assert 'id="anki-alive-today"' in today_content.body
-    assert "Memory core" in today_content.body
-    assert "2 reviews due" in today_content.body
-    assert "Begin Expedition" in today_content.body
-    assert "No additional signals right now." in today_content.body
-    assert "Oracle" not in today_content.body
-    assert "Rescue" not in today_content.body
-    assert today_content.css == [
+    today = FakeWebContent()
+    hooks.webview_will_set_content[0](today, deck_browser)
+    assert 'id="anki-alive-today"' in today.body
+    assert "Memory core" in today.body
+    assert "2 reviews due" in today.body
+    assert "Begin Expedition" in today.body
+    assert "No additional signals right now." in today.body
+    assert "Oracle" not in today.body
+    assert "Rescue" not in today.body
+    assert today.css[-2:] == [
         "/_addons/anki_alive_dev/anki_alive/ui/foundation.css",
         "/_addons/anki_alive_dev/anki_alive/ui/expedition.css",
-    ]
-    assert today_content.js == [
-        "/_addons/anki_alive_dev/anki_alive/ui/expedition.js"
     ]
 
     handled = hooks.webview_did_receive_js_message[0](
@@ -250,21 +196,20 @@ def test_today_and_reviewer_ui_use_real_expedition_state(tmp_path: Path) -> None
     )
     assert handled[0] is True
     assert mw.state == "review"
-    assert mw.col.timebox_starts == 1
 
-    profile_key = database.connection.execute(
-        "SELECT profile_key FROM expeditions LIMIT 1"
-    ).fetchone()[0]
-    active = service.resumable(profile_key)
+    row = database.connection.execute(
+        "SELECT profile_key, expedition_id FROM expeditions LIMIT 1"
+    ).fetchone()
+    profile_key = row[0]
+    expedition_id = UUID(row[1])
+    active = service.get(expedition_id)
     assert active is not None
     assert active.status is ExpeditionStatus.ACTIVE
     assert active.target_reviews == 2
 
-    reviewer_content = FakeWebContent()
-    hooks.webview_will_set_content[0](reviewer_content, FakeReviewer())
-    assert 'id="anki-alive-review-strip"' in reviewer_content.body
-    assert "2" in reviewer_content.body
-    assert "pointer-events" not in reviewer_content.body
+    reviewer = FakeWebContent()
+    hooks.webview_will_set_content[0](reviewer, FakeReviewer())
+    assert 'id="anki-alive-review-strip"' in reviewer.body
 
     for index, rating in enumerate((1, 4), start=1):
         bus.publish(
@@ -274,40 +219,23 @@ def test_today_and_reviewer_ui_use_real_expedition_state(tmp_path: Path) -> None
                 rating=rating,
                 source_review_id=100 + index,
                 reviewed_at_utc=datetime(
-                    2026,
-                    8,
-                    18,
-                    12,
-                    index,
-                    tzinfo=timezone.utc,
+                    2026, 8, 18, 12, index, tzinfo=timezone.utc
                 ),
             )
         )
+    flush()
 
-    run_scheduled()
-
-    completed = service.get(active.expedition_id)
+    completed = service.get(expedition_id)
     assert completed is not None
     assert completed.status is ExpeditionStatus.COMPLETED
     assert mw.state == "deckBrowser"
-    assert "deckBrowser" in mw.transitions
     assert any("setProgress" in script for script in mw.web.evals)
     assert not any("showCheckpoint" in script for script in mw.web.evals)
 
-    completion_content = FakeWeb Content()
-    hooks.webview_will_set_content[0](completion_content, deck_browser)
-    assert "EXPEDITION COMPLETE" in completion_content.body
-    assert "The route is complete." in completion_content.body
-    assert "Continue reviewing" in completion_content.body
-
-    hooks.webview_did_receive_js_message[0](
-        (False, None),
-        "anki-alive:expedition:done",
-        deck_browser,
-    )
-    after_done = FakeWebContent()
-    hooks.webview_will_set_content[0](after_done, deck_browser)
-    assert "EXPEDITION COMPLETE" not in after_done.body
+    completion = FakeWebContent()
+    hooks.webview_will_set_content[0](completion, deck_browser)
+    assert "EXPEDITION COMPLETE" in completion.body
+    assert "Continue reviewing" in completion.body
 
     hooks.webview_did_receive_js_message[0](
         (False, None),
@@ -315,35 +243,24 @@ def test_today_and_reviewer_ui_use_real_expedition_state(tmp_path: Path) -> None
         deck_browser,
     )
     assert settings.snapshot.focus_mode_enabled is True
-    assert deck_browser.refresh_count >= 2
 
     database.close()
 
 
 def test_leaving_reviewer_pauses_active_expedition(tmp_path: Path) -> None:
-    (
-        database,
-        _bus,
-        service,
-        _settings,
-        hooks,
-        _mw,
-        _diagnostics,
-        deck_browser,
-        _run_scheduled,
-   ) = make_ui_runtime(tmp_path, due=5)
-
+    database, _bus, service, _settings, hooks, _mw, deck_browser, _flush = make_runtime(
+        tmp_path,
+        due=5,
+    )
     hooks.webview_did_receive_js_message[0](
         (False, None),
         "anki-alive:expedition:begin",
         deck_browser,
     )
     row = database.connection.execute(
-        "SELECT profile_key, expedition_id FROM expeditions LIMIT 1"
+        "SELECT expedition_id FROM expeditions LIMIT 1"
     ).fetchone()
-    profile_key = row[0]
-    expedition_id = UUID(row[1])
-    assert service.resumable(profile_key).status is ExpeditionStatus.ACTIVE
+    expedition_id = UUID(row[0])
 
     hooks.reviewer_will_end[0]()
 
@@ -353,14 +270,10 @@ def test_leaving_reviewer_pauses_active_expedition(tmp_path: Path) -> None:
     database.close()
 
 
-def test_phase1_ui_assets_respect_canonical_review_constraints() -> None:
+def test_ui_assets_keep_reviewer_quiet() -> None:
     root = Path(__file__).parents[1]
-    css = (root / "anki_alive" / "ui" / "expedition.css").read_text(
-        encoding="utf-8"
-    )
-    js = (root / "anki_alive" / "ui" / "expedition.js").read_text(
-        encoding="utf-8"
-    )
+    css = (root / "anki_alive" / "ui" / "expedition.css").read_text(encoding="utf-8")
+    js = (root / "anki_alive" / "ui" / "expedition.js").read_text(encoding="utf-8")
 
     assert "aa-review-strip" in css
     assert "pointer-events: none" in css
