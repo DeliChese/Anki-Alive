@@ -7,7 +7,7 @@ from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 _OBSERVATION_NAMESPACE = uuid5(NAMESPACE_URL, "anki-alive:review-observation:v1")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ReviewObservation:
     observation_id: UUID
     profile_key: str
@@ -29,7 +29,7 @@ class ReviewObservation:
             raise ValueError("reviewed_at_utc must be timezone-aware")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ReviewReversed:
     profile_key: str
     card_id: int
