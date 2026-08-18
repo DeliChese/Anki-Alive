@@ -8,7 +8,7 @@ from anki_alive.core.events import EventBus
 from anki_alive.core.review import ReviewObservation, ReviewReversed, new_observation
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class SourceReview:
     review_id: int
     card_id: int
