@@ -10,12 +10,13 @@ from anki_alive.core.focus import FocusPolicy
 from anki_alive.core.reconciliation import ReversibleReviewCounter
 from anki_alive.core.review import ReviewObservation, ReviewReversed, new_observation
 from anki_alive.core.time import FixedClock, local_study_date
+from anki_alive.diagnostics import DiagnosticsService
 from anki_alive.integration.hooks import AnkiHookRuntime
 from anki_alive.integration.profile import load_or_create_profile_key
 from anki_alive.integration.reviewer import ReviewObserver, SourceReview
 from anki_alive.performance import PerformanceTimer
 from anki_alive.settings import SettingsService
-from anki_alive.storage import Database, SCHEMA_VERSION
+from anki_alive.storage import BUSY_TIMEOUT_MS, Database, SCHEMA_VERSION
 
 
 def test_event_bus_is_idempotent_for_same_handler() -> None:
@@ -180,9 +181,10 @@ def test_settings_defaults_invalid_values_and_save() -> None:
     assert "unknown_category" not in saved[-1]
 
 
-def test_database_fresh_reopen_and_transaction_rollback() -> None:
+def test_database_fresh_reopen_rollback_backup_and_integrity() -> None:
     with TemporaryDirectory() as temporary_directory:
         path = Path(temporary_directory) / "anki_alive.sqlite3"
+        backup_path = Path(temporary_directory) / "backup" / "anki_alive.sqlite3"
         database = Database(path)
         database.open()
         assert database.connection.execute(
@@ -191,6 +193,9 @@ def test_database_fresh_reopen_and_transaction_rollback() -> None:
         assert database.connection.execute(
             "SELECT version FROM migration_history ORDER BY version"
         ).fetchall() == [(SCHEMA_VERSION,)]
+        assert database.connection.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
+        assert database.connection.execute("PRAGMA busy_timeout").fetchone()[0] == BUSY_TIMEOUT_MS
+        assert database.integrity_check() is True
 
         try:
             with database.transaction() as connection:
@@ -205,6 +210,8 @@ def test_database_fresh_reopen_and_transaction_rollback() -> None:
         assert database.connection.execute(
             "SELECT version FROM migration_history WHERE version = 999"
         ).fetchone() is None
+        assert database.backup_to(backup_path) == backup_path
+        assert backup_path.exists()
         database.close()
 
         reopened = Database(path)
@@ -213,6 +220,45 @@ def test_database_fresh_reopen_and_transaction_rollback() -> None:
             "SELECT schema_version FROM schema_meta WHERE singleton = 1"
         ).fetchone()[0] == SCHEMA_VERSION
         reopened.close()
+
+        backup = Database(backup_path)
+        backup.open()
+        assert backup.integrity_check() is True
+        backup.close()
+
+
+def test_diagnostics_disabled_by_default_and_redacts_content_fields() -> None:
+    disabled = DiagnosticsService()
+    assert disabled.emit("review.accepted", card_id=42) is None
+
+    service = DiagnosticsService(enabled=True)
+    record = service.emit(
+        "review.accepted",
+        card_id=42,
+        source_review_id=9001,
+        rating=3,
+        question="secret card front",
+        answer="secret card back",
+        metadata={"text": "secret", "count": 2},
+    )
+
+    assert record is not None
+    assert record.fields["card_id"] == 42
+    assert record.fields["source_review_id"] == 9001
+    assert record.fields["rating"] == 3
+    assert "question" not in record.fields
+    assert "answer" not in record.fields
+    assert record.fields["metadata"] == {"count": 2}
+
+
+def test_ui_foundation_contains_focus_and_reduced_motion_baselines() -> None:
+    css_path = Path(__file__).parents[1] / "anki_alive" / "ui" / "foundation.css"
+    css = css_path.read_text(encoding="utf-8")
+
+    assert "--aa-bg-canvas" in css
+    assert ":focus-visible" in css
+    assert "prefers-reduced-motion: reduce" in css
+    assert 'data-focus-mode="true"' in css
 
 
 def test_performance_timer_records_named_sample() -> None:
