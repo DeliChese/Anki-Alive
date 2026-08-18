@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterator
 
 SCHEMA_VERSION = 1
+BUSY_TIMEOUT_MS = 5_000
 
 
 class Database:
@@ -13,6 +14,10 @@ class Database:
 
     Only schema metadata and migration history are durable at this phase.
     Feature tables intentionally do not exist yet.
+
+    The sidecar uses WAL because it is add-on-owned, local, and benefits from
+    separating readers from writes. The database is checkpointed on close so
+    backups can copy the main file after a graceful shutdown.
     """
 
     def __init__(self, path: str | Path) -> None:
@@ -23,16 +28,25 @@ class Database:
         if self._connection is not None:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path)
+        connection = sqlite3.connect(
+            self.path,
+            timeout=BUSY_TIMEOUT_MS / 1000,
+        )
         connection.execute("PRAGMA foreign_keys = ON")
+        connection.execute(f"PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}")
+        connection.execute("PRAGMA journal_mode = WAL")
+        connection.execute("PRAGMA synchronous = NORMAL")
         self._connection = connection
         self._migrate()
 
     def close(self) -> None:
         if self._connection is None:
             return
-        self._connection.close()
-        self._connection = None
+        try:
+            self._connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            self._connection.close()
+            self._connection = None
 
     @property
     def connection(self) -> sqlite3.Connection:
@@ -49,6 +63,17 @@ class Database:
         except Exception:
             connection.rollback()
             raise
+
+    def integrity_check(self) -> bool:
+        row = self.connection.execute("PRAGMA integrity_check").fetchone()
+        return bool(row and row[0] == "ok")
+
+    def backup_to(self, destination: str | Path) -> Path:
+        destination_path = Path(destination)
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(destination_path) as target:
+            self.connection.backup(target)
+        return destination_path
 
     def _migrate(self) -> None:
         with self.transaction() as connection:
