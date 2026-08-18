@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from contextlib import nullcontext
+from typing import Any, ContextManager
 
 from anki_alive.core.events import EventBus
 from anki_alive.integration.profile import load_or_create_profile_key
 from anki_alive.integration.reviewer import ReviewObserver, SourceReview
+from anki_alive.performance import PerformanceTimer
 
 
 class AnkiHookRuntime:
@@ -15,10 +17,18 @@ class AnkiHookRuntime:
     to test with fakes.
     """
 
-    def __init__(self, *, mw: Any, gui_hooks: Any, event_bus: EventBus) -> None:
+    def __init__(
+        self,
+        *,
+        mw: Any,
+        gui_hooks: Any,
+        event_bus: EventBus,
+        performance: PerformanceTimer | None = None,
+    ) -> None:
         self._mw = mw
         self._gui_hooks = gui_hooks
         self._event_bus = event_bus
+        self._performance = performance
         self._review_observer: ReviewObserver | None = None
         self._registered = False
 
@@ -35,6 +45,11 @@ class AnkiHookRuntime:
     def _append_once(hook: Any, handler: Any) -> None:
         if handler not in hook:
             hook.append(handler)
+
+    def _measure(self, name: str) -> ContextManager[None]:
+        if self._performance is None:
+            return nullcontext()
+        return self._performance.measure(name)
 
     def _on_collection_loaded(self, collection: Any) -> None:
         profile_key = load_or_create_profile_key(self._mw.pm.profileFolder())
@@ -72,12 +87,15 @@ class AnkiHookRuntime:
         self._review_observer = None
 
     def _on_answered(self, reviewer: Any, card: Any, ease: int) -> None:
+        del reviewer
         if self._review_observer is None:
             return
-        self._review_observer.on_answered(card_id=int(card.id), rating=int(ease))
+        with self._measure("reviewer_did_answer_card"):
+            self._review_observer.on_answered(card_id=int(card.id), rating=int(ease))
 
     def _on_undo(self, changes_after_undo: Any) -> None:
         del changes_after_undo
         if self._review_observer is None:
             return
-        self._review_observer.on_undo_completed()
+        with self._measure("state_did_undo"):
+            self._review_observer.on_undo_completed()
