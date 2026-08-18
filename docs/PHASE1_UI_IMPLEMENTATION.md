@@ -1,6 +1,6 @@
 # Phase 1 Expedition UI Implementation Notes
 
-Status: IN PROGRESS
+Status: PRE-HOST VALIDATION
 Phase: 1
 Feature: Expedition
 Canonical art direction: Arcane Memory Interface
@@ -29,35 +29,22 @@ The implementation treats these documents as constraints:
 
 ### Today
 
-Host surface:
-
-- Anki Deck Browser WebView is augmented rather than replaced.
-- Normal Anki deck navigation remains intact if Anki Alive presentation fails.
+The Anki Deck Browser WebView is augmented rather than replaced. Normal Anki
+navigation remains available if Anki Alive presentation fails.
 
 Canonical components:
 
 - `AA-MemoryCore`
 - `AA-ExpeditionTrack`
 - `AA-CheckpointNode`
-- shared button, section, empty-state anatomy
+- shared button, section, and empty-state anatomy
 
-Primary task:
+Memory Core uses only the current real Anki review queue in Phase 1. It does not
+invent stability, fragility, health, or other Memory Engine meaning that does
+not yet exist.
 
-- begin or resume one bounded Expedition.
-
-Memory Core policy:
-
-- Phase 1 displays only the current real Anki due queue for the selected study
-  context.
-- It does not infer memory health, stability, fragility, or other Memory Engine
-  meaning that Phase 1 cannot support yet.
-- No generated artwork is a structural dependency.
-
-Today's Signals policy:
-
-- the shell is present,
-- no Oracle/Rescue/Nemesis/Fragment/Relic counts are fabricated,
-- an empty quiet state is shown when no implemented signal exists.
+Today's Signals renders a truthful empty state. No Oracle, Rescue, Nemesis,
+Fragment, Relic, or World signal is fabricated before its phase exists.
 
 ### Reviewer
 
@@ -74,7 +61,7 @@ Rules:
 - no particles,
 - no animated blur,
 - no ambient loop,
-- no secondary feature dashboard,
+- no secondary dashboard,
 - card remains visually dominant.
 
 Checkpoint feedback is a small non-blocking status cue after a real checkpoint
@@ -82,20 +69,21 @@ transition.
 
 ### Completion
 
-Completion is moved out of active recall and back to the Deck Browser Today
-surface.
+Completion leaves active recall and returns to the Deck Browser Today surface.
 
 Reasons:
 
-- protect recall from a completion overlay appearing over the next question,
-- provide real session closure,
-- make `Done` visually primary,
-- keep `Continue reviewing` explicit and secondary,
-- avoid immediately manufacturing another Expedition.
+- no closure overlay on top of the next question,
+- `Done` is psychologically primary,
+- `Continue reviewing` is explicit and secondary,
+- completion does not manufacture another mandatory Expedition.
+
+Completion presentation state is durable and separate from Expedition domain
+state. A pending completion summary survives restart until dismissed. If undo
+reconciliation reopens the Expedition, the stale completion presentation is
+invalidated.
 
 ## Expedition visual DNA
-
-Applied identity:
 
 ```text
 Metaphor
@@ -126,29 +114,28 @@ Explicitly rejected:
 
 ## Approved effects
 
-The implementation reuses these catalog IDs:
+The implementation reuses catalog semantics for:
 
-- `AA-FadeRise-01` for normal Today entrance
-- `AA-Press-01` for button press
-- `AA-ProgressFlow-01` for real progress changes
-- `AA-CheckpointActivate-01` for checkpoint state
-- `AA-ExpeditionComplete-01` for closure semantics
+- `AA-FadeRise-01`
+- `AA-Press-01`
+- `AA-ProgressFlow-01`
+- `AA-CheckpointActivate-01`
+- `AA-ExpeditionComplete-01`
 
-No new effect ID is introduced.
+No new effect family is introduced.
 
 ## Event orchestration
 
-Phase 1 now includes the small central `EventOrchestrator` required by
-ADR-021.
+Phase 1 includes the small central `EventOrchestrator` required by ADR-021.
 
-At one review boundary:
+At one boundary:
 
 - ambient/minor presentation may coexist,
 - at most one major/closure event is selected,
-- `SESSION_CLOSURE` outranks a checkpoint `MAJOR` event.
+- `SESSION_CLOSURE` outranks checkpoint `MAJOR`.
 
-This specifically prevents the final checkpoint and Expedition completion from
-both presenting prominently on the same accepted review.
+The final checkpoint therefore never competes visually with Expedition
+completion on the same accepted review.
 
 ## Target sizing
 
@@ -158,97 +145,127 @@ Initial implementation policy:
 target = min(50, currently available review actions)
 ```
 
-This remains PROVISIONAL implementation policy, not a newly locked product
-formula.
+This remains PROVISIONAL implementation policy, not a locked product formula.
+The locked constraints remain: positive target, bounded target, and no silent
+target growth after creation.
 
-Constraints that remain locked:
+## Queue exhaustion
 
-- target is positive,
-- target is clamped to currently visible work,
-- target never silently grows after creation.
+A route may run out of eligible Anki reviews before reaching its fixed target.
+The implementation distinguishes this from a manual exit using Anki's reviewer
+lifecycle:
 
-## Focus Mode
+- leaving review while a card still exists -> PAUSED,
+- reviewer cleanup after Anki has no next card -> COMPLETED due to queue exhaustion.
 
-Focus Mode keeps:
+The planned target does not change. If an Expedition planned for 50 reviews
+closes after 43 because Anki has no eligible review left, durable state remains:
 
-- bounded progress,
-- route meaning,
-- current numeric progress,
-- core actions.
+```text
+target_reviews = 50
+completed_reviews = 43
+status = COMPLETED
+```
 
-It reduces:
+The completion copy explains the reason instead of pretending that the target
+was 43. Undo may make work eligible again; reconciliation can reopen the
+Expedition and invalidates stale completion presentation.
 
-- ambient Memory Core geometry,
-- glow,
-- expressive transition,
-- reviewer strip width and visual weight.
+## Focus Mode and Reduced Motion
 
-Domain behavior is unchanged.
+Focus Mode keeps bounded progress, numeric meaning, and core actions while
+reducing ambient Memory Core geometry, glow, expressive transition, and reviewer
+strip weight. Domain behavior is identical.
 
-## Reduced Motion
-
-Both explicit Anki Alive reduced-motion setting and
-`prefers-reduced-motion` are respected.
-
-Fallbacks use:
-
-- static state,
-- instant progress geometry,
-- opacity-only or effectively instant transitions.
-
-No information depends on animation order.
+Both the explicit Anki Alive reduced-motion setting and
+`prefers-reduced-motion` are respected. Meaning never depends on animation
+order.
 
 ## Accessibility
 
-Implemented in this slice:
+Implemented before host validation:
 
 - native keyboard-reachable buttons,
-- visible `:focus-visible` treatment,
-- numeric progress in addition to route geometry,
-- `role="progressbar"` and ARIA values,
-- non-color checkpoint labels/state,
+- visible `:focus-visible`,
+- numeric progress plus route geometry,
+- `role="progressbar"` with ARIA values,
+- non-color checkpoint state labels,
 - `aria-live` checkpoint feedback,
 - pointer-transparent reviewer strip.
 
 Real desktop keyboard and screen-reader-adjacent behavior still requires host
 validation.
 
+## Contrast audit
+
+Dark-mode Expedition amber on the main dark surface is comfortably readable.
+The original amber was too light for small text on the light surface, so light
+mode now uses a darker Expedition amber (`#80612c`) while preserving the same
+semantic family. The revised small-text contrast is above the intended readable
+threshold on the light surfaces used by Phase 1.
+
 ## Performance approach
 
 Reviewer UI updates:
 
-- do not query collection-wide state,
-- read compact sidecar Expedition state,
-- schedule presentation work onto the Qt event loop after the review event,
-- update a tiny existing DOM strip through one JS call,
-- use no JavaScript animation loop,
-- use transform for reviewer progress,
-- use no canvas/WebGL/particle system.
+- no collection-wide scan,
+- compact sidecar Expedition lookup,
+- presentation work scheduled after the review event,
+- one small DOM update call,
+- transform-based progress,
+- no JavaScript animation loop,
+- no canvas/WebGL/particle system.
 
-Measured Phase 1 reviewer overhead remains a manual-host validation item.
+Measured Phase 1 reviewer overhead remains a real-host validation item.
 
 ## Data hygiene
 
-`user_files/anki_alive.sqlite3` is local user state and must not be committed.
-The repository ignores local SQLite sidecar files while preserving
-`user_files/README.txt`.
+Local sidecar SQLite files under `user_files/` are ignored by Git while
+`user_files/README.txt` remains tracked.
+
+## Automated-validation status
+
+Automated test coverage has been added for:
+
+- all four grades counting equally,
+- duplicate review suppression,
+- checkpoint transition uniqueness,
+- completion uniqueness,
+- undo reopening,
+- one resumable Expedition per profile,
+- bounded target planning,
+- EventOrchestrator prominence/dedupe,
+- Today and reviewer projections,
+- Focus Mode command path,
+- durable completion presentation after reopen,
+- stale completion invalidation after undo,
+- manual reviewer exit -> pause,
+- natural queue exhaustion -> truthful early closure,
+- quiet reviewer CSS/JS constraints.
+
+GitHub Actions is configured for pushes to `main` on Python 3.9 and 3.13.
+The available connector does not expose push-triggered workflow runs for these
+commits, and the execution sandbox cannot resolve github.com for a local clone.
+Therefore this note does not claim CI PASS.
 
 ## Pre-host UI review
 
 Overall status: NEEDS HOST INSPECTION
 
-No known canonical blocker is intentionally accepted in code.
+No known canonical design blocker is intentionally accepted in code.
 
 Still required before visual acceptance:
 
 - real Anki screenshot inspection,
+- dark and light mode inspection,
 - narrow-window inspection,
-- Focus Mode host inspection,
-- Reduced Motion host inspection,
-- keyboard path host inspection,
+- Focus Mode inspection,
+- Reduced Motion inspection,
+- keyboard path inspection,
 - reviewer overlap check against real card layouts,
 - performance measurement,
-- completion/continue flow validation.
+- completion/restart/continue flow validation,
+- filtered deck/custom study smoke test.
 
-The final Phase 1 handoff must record these results rather than claiming them in
-advance.
+Use `docs/PHASE1_MANUAL_VALIDATION.md` for the host run. The final Phase 1
+handoff must record actual evidence rather than claiming it in advance.
