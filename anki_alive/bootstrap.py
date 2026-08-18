@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from anki_alive.core.events import EventBus
+from anki_alive.core.review import ReviewObservation, ReviewReversed
 from anki_alive.diagnostics import DiagnosticsService
 from anki_alive.integration.compatibility import ensure_supported_anki_version
 from anki_alive.integration.hooks import AnkiHookRuntime
@@ -54,6 +54,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
 
     diagnostics = DiagnosticsService(
         enabled=bool(settings.snapshot.diagnostics.get("enabled", False)),
+        logger=mw.addonManager.get_logger(module_name),
     )
 
     def record_timing(sample: TimingSample) -> None:
@@ -66,6 +67,27 @@ def bootstrap(module_name: str) -> AddonRuntime:
     performance = PerformanceTimer(record_timing)
     event_bus = EventBus()
 
+    event_bus.subscribe(
+        ReviewObservation,
+        lambda event: diagnostics.emit(
+            "review_observation",
+            card_id=event.card_id,
+            rating=event.rating,
+            source_review_id=event.source_review_id,
+            response_time_ms=event.response_time_ms,
+            observation_id=str(event.observation_id),
+        ),
+    )
+    event_bus.subscribe(
+        ReviewReversed,
+        lambda event: diagnostics.emit(
+            "review_reversed",
+            card_id=event.card_id,
+            source_review_id=event.source_review_id,
+            observation_id=str(event.observation_id) if event.observation_id else None,
+        ),
+    )
+
     addon_root = Path(__file__).resolve().parent.parent
     database = Database(addon_root / "user_files" / "anki_alive.sqlite3")
     database.open()
@@ -74,6 +96,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
         mw=mw,
         gui_hooks=gui_hooks,
         event_bus=event_bus,
+        performance=performance,
     )
     hooks.register()
 
@@ -86,7 +109,12 @@ def bootstrap(module_name: str) -> AddonRuntime:
         hooks=hooks,
         database=database,
     )
-    diagnostics.emit("bootstrap_complete", module_name=module_name)
+    diagnostics.emit(
+        "bootstrap_complete",
+        module_name=module_name,
+        anki_version=int_version(),
+        database_integrity=database.integrity_check(),
+    )
     return _runtime
 
 
