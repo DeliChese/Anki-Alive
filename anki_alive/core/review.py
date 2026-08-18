@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from uuid import UUID, uuid4
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
+
+_OBSERVATION_NAMESPACE = uuid5(NAMESPACE_URL, "anki-alive:review-observation:v1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +48,20 @@ class ReviewReversed:
             raise ValueError("a reversal needs observation_id or source_review_id")
 
 
+def observation_id_for_source(*, profile_key: str, source_review_id: int) -> UUID:
+    """Return a stable add-on identity for one Anki revlog row.
+
+    The profile key is part of the namespace input because revlog IDs are local
+    collection identifiers and must never collide across profiles.
+    """
+
+    if not profile_key:
+        raise ValueError("profile_key must not be empty")
+    if source_review_id <= 0:
+        raise ValueError("source_review_id must be positive")
+    return uuid5(_OBSERVATION_NAMESPACE, f"{profile_key}:{source_review_id}")
+
+
 def new_observation(
     *,
     profile_key: str,
@@ -57,8 +73,18 @@ def new_observation(
     reviewed_at_utc: datetime | None = None,
     observation_id: UUID | None = None,
 ) -> ReviewObservation:
+    if observation_id is None:
+        observation_id = (
+            observation_id_for_source(
+                profile_key=profile_key,
+                source_review_id=source_review_id,
+            )
+            if source_review_id is not None
+            else uuid4()
+        )
+
     return ReviewObservation(
-        observation_id=observation_id or uuid4(),
+        observation_id=observation_id,
         profile_key=profile_key,
         card_id=card_id,
         rating=rating,
