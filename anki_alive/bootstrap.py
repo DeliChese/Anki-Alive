@@ -11,6 +11,7 @@ from anki_alive.core.time import SystemClock
 from anki_alive.diagnostics import DiagnosticsService
 from anki_alive.expedition import ExpeditionRepository, ExpeditionService
 from anki_alive.integration.compatibility import ensure_supported_anki_version
+from anki_alive.integration.expedition_ui import ExpeditionUiRuntime
 from anki_alive.integration.hooks import AnkiHookRuntime
 from anki_alive.integration.settings_adapter import AnkiAddonSettingsAdapter
 from anki_alive.performance import PerformanceTimer, TimingSample
@@ -26,6 +27,7 @@ class AddonRuntime:
     diagnostics: DiagnosticsService
     performance: PerformanceTimer
     hooks: AnkiHookRuntime
+    expedition_ui: ExpeditionUiRuntime
     database: Database
     expedition: ExpeditionService
 
@@ -45,6 +47,9 @@ def bootstrap(module_name: str) -> AddonRuntime:
 
     from anki.utils import int_version
     from aqt import gui_hooks, mw
+    from aqt.deckbrowser import DeckBrowser
+    from aqt.qt import QTimer
+    from aqt.reviewer import Reviewer
 
     ensure_supported_anki_version(int_version())
 
@@ -89,7 +94,11 @@ def bootstrap(module_name: str) -> AddonRuntime:
             "review_reversed",
             card_id=event.card_id,
             source_review_id=event.source_review_id,
-            observation_id=str(event.observation_id) if event.observation_id else None,
+            observation_id=(
+                str(event.observation_id)
+                if event.observation_id
+                else None
+            ),
         ),
     )
 
@@ -108,8 +117,14 @@ def bootstrap(module_name: str) -> AddonRuntime:
         ids=Uuid4Factory(),
         local_timezone=local_timezone,
     )
-    event_bus.subscribe(ReviewObservation, expedition.on_review_observation)
-    event_bus.subscribe(ReviewReversed, expedition.on_review_reversed)
+    event_bus.subscribe(
+        ReviewObservation,
+        expedition.on_review_observation,
+    )
+    event_bus.subscribe(
+        ReviewReversed,
+        expedition.on_review_reversed,
+    )
 
     hooks = AnkiHookRuntime(
         mw=mw,
@@ -119,6 +134,27 @@ def bootstrap(module_name: str) -> AddonRuntime:
     )
     hooks.register()
 
+    mw.addonManager.setWebExports(
+        module_name,
+        r"anki_alive/ui/.*\.(css|js)",
+    )
+    addon_package = mw.addonManager.addonFromModule(module_name)
+    asset_base = f"/_addons/{addon_package}/anki_alive/ui"
+
+    expedition_ui = ExpeditionUiRuntime(
+        mw=mw,
+        gui_hooks=gui_hooks,
+        event_bus=event_bus,
+        expedition=expedition,
+        settings=settings,
+        diagnostics=diagnostics,
+        deck_browser_type=DeckBrowser,
+        reviewer_type=Reviewer,
+        asset_base=asset_base,
+        schedule=lambda callback: QTimer.singleShot(0, callback),
+    )
+    expedition_ui.register()
+
     _runtime = AddonRuntime(
         module_name=module_name,
         event_bus=event_bus,
@@ -126,6 +162,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
         diagnostics=diagnostics,
         performance=performance,
         hooks=hooks,
+        expedition_ui=expedition_ui,
         database=database,
         expedition=expedition,
     )

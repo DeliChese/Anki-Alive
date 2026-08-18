@@ -8,24 +8,32 @@
   --aa-space-5: 24px;
   --aa-space-6: 32px;
   --aa-space-7: 48px;
+  --aa-space-8: 64px;
+  --aa-space-9: 96px;
 
   --aa-radius-sm: 8px;
   --aa-radius-md: 12px;
   --aa-radius-lg: 16px;
   --aa-radius-xl: 20px;
+  --aa-radius-2xl: 24px;
+  --aa-radius-pill: 999px;
 
   --aa-bg-canvas: #111217;
   --aa-bg-surface: #181a22;
   --aa-bg-elevated: #20232d;
   --aa-bg-overlay: #292d39;
+  --aa-bg-event: #1d1d22;
 
   --aa-text-primary: #f4f5f7;
   --aa-text-secondary: #c6cad3;
   --aa-text-tertiary: #979eab;
+  --aa-text-muted: #7f8693;
+  --aa-text-inverse: #18191d;
 
   --aa-line-subtle: rgba(255, 255, 255, 0.08);
   --aa-line-default: rgba(255, 255, 255, 0.16);
   --aa-line-strong: rgba(255, 255, 255, 0.28);
+  --aa-line-active: rgba(200, 169, 107, 0.62);
 
   --aa-accent-expedition: #c8a96b;
   --aa-accent-oracle: #9bd5e8;
@@ -35,16 +43,41 @@
   --aa-accent-relic: #d5bd82;
   --aa-accent-world: #79aaa7;
 
+  --aa-accent-expedition-soft: rgba(200, 169, 107, 0.14);
+  --aa-accent-expedition-soft-strong: rgba(200, 169, 107, 0.19);
+  --aa-accent-expedition-line: rgba(200, 169, 107, 0.50);
+  --aa-accent-expedition-line-soft: rgba(200, 169, 107, 0.34);
+  --aa-accent-expedition-glow: rgba(200, 169, 107, 0.10);
+  --aa-accent-expedition-wash: rgba(200, 169, 107, 0.055);
+  --aa-shadow-s1: 0 3px 12px rgba(0, 0, 0, 0.10);
+  --aa-shadow-s2: 0 10px 32px rgba(0, 0, 0, 0.12);
+
   --aa-focus-ring: 0 0 0 3px rgba(155, 213, 232, 0.45);
-  --aa-motion-micro: 120ms;
-  --aa-motion-standard: 200ms;
-  --aa-motion-reveal: 350ms;
+
+  --aa-time-1: 120ms;
+  --aa-time-2: 180ms;
+  --aa-time-3: 220ms;
+  --aa-time-4: 320ms;
+  --aa-time-5: 420ms;
+  --aa-time-6: 600ms;
+
+  --aa-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --aa-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --aa-ease-emphasized: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .anki-alive {
   color: var(--aa-text-primary);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.anki-alive *,
+.anki-alive *::before,
+.anki-alive *::after {
+  box-sizing: border-box;
 }
 
 .anki-alive :focus-visible {
@@ -66,15 +99,127 @@
   border: 0;
 }
 
+.aa-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.aa-type-h1,
+.aa-type-h2,
+.aa-type-h3,
+.aa-type-body,
+.aa-type-body-strong,
+.aa-type-label,
+.aa-type-caption,
+.aa-type-metric,
+.aa-type-metric-large,
+.aa-type-ritual {
+  margin: 0;
+}
+
+.aa-type-h1 {
+  font-size: clamp(24px, 3vw, 30px);
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.aa-type-h2 {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.aa-type-h3 {
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.aa-type-body {
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.55;
+}
+
+.aa-type-body-strong {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.aa-type-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.055em;
+  line-height: 1.3;
+}
+
+.aa-type-caption {
+  color: var(--aa-text-tertiary);
+  font-size: 12px;
+  font-weight: 450;
+  line-height: 1.45;
+}
+
+.aa-type-metric,
+.aa-type-metric-large {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.aa-type-metric {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.aa-type-metric-large {
+  font-size: clamp(28px, 4vw, 38px);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.aa-type-ritual {
+  color: var(--aa-accent-expedition);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  line-height: 1.3;
+}
+
+.aa-copy-muted {
+  color: var(--aa-text-secondary);
+}
+
 .anki-alive[data-focus-mode="true"] {
-  --aa-motion-micro: 0ms;
-  --aa-motion-standard: 0ms;
-  --aa-motion-reveal: 0ms;
+  --aa-time-1: 0ms;
+  --aa-time-2: 0ms;
+  --aa-time-3: 0ms;
+  --aa-time-4: 0ms;
+  --aa-time-5: 0ms;
+  --aa-time-6: 0ms;
 }
 
 .anki-alive[data-focus-mode="true"] [data-ambient="true"],
 .anki-alive[data-focus-mode="true"] [data-nonessential="true"] {
   display: none !important;
+}
+
+.anki-alive[data-reduced-motion="true"],
+.anki-alive[data-reduced-motion="true"] * {
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -93,11 +238,15 @@
     --aa-bg-surface: #ffffff;
     --aa-bg-elevated: #f0f0ed;
     --aa-bg-overlay: #e7e7e2;
+    --aa-bg-event: #f8f5ed;
     --aa-text-primary: #1c1d22;
     --aa-text-secondary: #4b4f59;
     --aa-text-tertiary: #6f7580;
+    --aa-text-muted: #777b84;
+    --aa-text-inverse: #f5f5f3;
     --aa-line-subtle: rgba(20, 22, 28, 0.08);
     --aa-line-default: rgba(20, 22, 28, 0.16);
     --aa-line-strong: rgba(20, 22, 28, 0.28);
+    --aa-line-active: rgba(143, 111, 53, 0.58);
   }
 }
