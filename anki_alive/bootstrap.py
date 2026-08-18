@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from anki_alive.core.events import EventBus
+from anki_alive.core.ids import Uuid4Factory
 from anki_alive.core.review import ReviewObservation, ReviewReversed
+from anki_alive.core.time import SystemClock
 from anki_alive.diagnostics import DiagnosticsService
+from anki_alive.expedition import ExpeditionRepository, ExpeditionService
 from anki_alive.integration.compatibility import ensure_supported_anki_version
 from anki_alive.integration.hooks import AnkiHookRuntime
 from anki_alive.integration.settings_adapter import AnkiAddonSettingsAdapter
@@ -23,6 +27,7 @@ class AddonRuntime:
     performance: PerformanceTimer
     hooks: AnkiHookRuntime
     database: Database
+    expedition: ExpeditionService
 
     def close(self) -> None:
         self.database.close()
@@ -92,6 +97,20 @@ def bootstrap(module_name: str) -> AddonRuntime:
     database = Database(addon_root / "user_files" / "anki_alive.sqlite3")
     database.open()
 
+    local_timezone = datetime.now().astimezone().tzinfo
+    if local_timezone is None:
+        raise RuntimeError("unable to resolve local timezone")
+
+    expedition = ExpeditionService(
+        repository=ExpeditionRepository(database),
+        event_bus=event_bus,
+        clock=SystemClock(),
+        ids=Uuid4Factory(),
+        local_timezone=local_timezone,
+    )
+    event_bus.subscribe(ReviewObservation, expedition.on_review_observation)
+    event_bus.subscribe(ReviewReversed, expedition.on_review_reversed)
+
     hooks = AnkiHookRuntime(
         mw=mw,
         gui_hooks=gui_hooks,
@@ -108,6 +127,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
         performance=performance,
         hooks=hooks,
         database=database,
+        expedition=expedition,
     )
     diagnostics.emit(
         "bootstrap_complete",
