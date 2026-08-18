@@ -2,12 +2,13 @@
 
 ## Status
 
-PARTIAL — REAL ANKI HOST VALIDATION PENDING
+PARTIAL — REVIEW/UNDO HOST VALIDATION PENDING
 
 Completed on: not complete
 Add-on version: 0.0.1-dev0
 Schema version: 1
-Minimum Anki version: 25.02.7 (`250207`), provisional until real-host confirmation
+Minimum Anki version: 25.02.7 (`250207`), provisional until review/undo host confirmation
+Real-host startup validated on: Anki 25.09.4 (d52ca669), Python 3.13.5, Qt 6.9.1, PyQt 6.9.1, Windows 11 (10.0.26200)
 
 ---
 
@@ -37,10 +38,12 @@ Minimum Anki version: 25.02.7 (`250207`), provisional until real-host confirmati
 - simple real-host validation checklist
 - GitHub Actions CI matrix for Python 3.9 and 3.13
 - canonical Phase 0 ADR/status synchronization
+- real Anki linked-development startup on Anki 25.09.4 / Windows 11
 
 ## 2. Scope Not Completed
 
-- real Anki smoke test
+- accepted-review mapping in real Anki
+- review undo/reversal mapping in real Anki
 - real reviewer hook latency benchmark
 - final removal of provisional qualifier from the Anki 25.02.7 compatibility floor
 - final Phase 0 completion status
@@ -51,7 +54,9 @@ Accepted reviews are observed through `gui_hooks.reviewer_did_answer_card`. The 
 
 Undo does not blindly mutate feature state. `gui_hooks.state_did_undo` only triggers reconciliation. Tracked source revlog rows are checked, and `ReviewReversed` is emitted only when a previously observed source row is proven absent.
 
-Packaged bootstrap now loads native Anki config, opens the sidecar database, registers hooks once, wires privacy-safe diagnostics to Anki's official add-on logger, and instruments accepted-review/undo hook latency.
+Packaged bootstrap loads native Anki config, opens the sidecar database, registers hooks once, wires privacy-safe diagnostics to Anki's official add-on logger, and instruments accepted-review/undo hook latency.
+
+The linked-development entrypoint was validated in real Anki after two host-only issues were found and corrected: the repo-root package import path and non-iterable generated GUI hook objects.
 
 ## 4. Architecture Changes
 
@@ -123,13 +128,21 @@ Matrix:
 - Python 3.9 — PASS
 - Python 3.13 — PASS
 
-Latest code-changing workflow checked during this handoff update: run `32110194168`, both matrix jobs successful.
+Latest code-changing workflow checked before real-host startup validation: run `32110194168`, both matrix jobs successful. Later host fixes must also retain green CI before Phase 0 completion.
 
 Coverage includes core/reconciliation, persistence, settings, diagnostics redaction, UI foundation, fake-host review/undo integration, compatibility metadata, and Anki config adapter behavior.
 
 ### Manual
 
-Not run in real Anki yet.
+Real linked-development startup: PASS.
+
+Host:
+
+- Anki 25.09.4 (d52ca669)
+- Python 3.13.5
+- Qt 6.9.1
+- PyQt 6.9.1
+- Windows 11 10.0.26200
 
 Canonical checklist: `docs/PHASE0_MANUAL_VALIDATION.md`.
 
@@ -137,14 +150,13 @@ Canonical checklist: `docs/PHASE0_MANUAL_VALIDATION.md`.
 
 - accepted review mapping in desktop Anki
 - undo mapping in desktop Anki
-- real add-on startup through linked development folder
 - settings/config behavior through Anki Add-ons UI
-- sidecar lifecycle in actual Anki process
+- sidecar lifecycle across profile close/reopen
 - real reviewer latency
 
 ## 8. Performance Findings
 
-Performance instrumentation now wraps:
+Performance instrumentation wraps:
 
 - `reviewer_did_answer_card`
 - `state_did_undo`
@@ -170,7 +182,7 @@ Implemented foundation:
 - non-color status-label mechanism
 - light/dark semantic tokens
 
-Real keyboard/WebView feature validation belongs to later UI slices.
+Real keyboard/WebView feature validation remains for later UI slices.
 
 ## 10. Major Files Changed
 
@@ -218,11 +230,11 @@ Canonical decisions are synchronized in `docs/06_DECISIONS.md`.
 
 ## 12. Known Issues
 
-### KI-001 — Real-host review mapping unverified
+### KI-001 — Real-host review mapping not yet validated
 
 Severity: HIGH
 Impact: Phase 1 durable progress remains blocked.
-Required action: run `docs/PHASE0_MANUAL_VALIDATION.md` in real Anki.
+Required action: run accepted review + undo checks in `docs/PHASE0_MANUAL_VALIDATION.md`.
 
 ### KI-002 — Reviewer latency unmeasured
 
@@ -232,7 +244,7 @@ Required action: collect diagnostic timing samples during the same manual smoke 
 
 ## 13. Technical Debt
 
-No known Phase 0 code debt currently blocks the manual validation gate.
+No known Phase 0 code debt currently blocks the remaining manual validation gate.
 
 Cross-feature transaction policy remains intentionally deferred to no later than Phase 3.
 
@@ -247,7 +259,6 @@ Before Phase 1 begins:
 - manually validate accepted reviews in real Anki
 - manually validate review undo/reversal in real Anki
 - measure reviewer overhead
-- record exact Anki version and OS
 - promote the provisional compatibility floor if evidence passes
 - change this handoff from PARTIAL only when Definition of Done is actually satisfied
 
