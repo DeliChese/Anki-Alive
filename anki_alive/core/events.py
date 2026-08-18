@@ -9,7 +9,7 @@ EventT = TypeVar("EventT")
 Handler = Callable[[Any], None]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class Subscription:
     event_type: type[Any]
     handler: Handler
