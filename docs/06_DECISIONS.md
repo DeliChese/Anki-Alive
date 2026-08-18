@@ -166,13 +166,15 @@ Expedition owns canonical durable session target, progress, checkpoints, lifecyc
 
 ### ADR-020 — Shared Undo/Reconciliation Architecture
 
-Status: ACCEPTED IN PRINCIPLE / HOST MAPPING PENDING PHASE 0
+Status: ACCEPTED / MANUAL HOST CONFIRMATION PENDING
 
-Review-derived feature transitions should reference normalized review observations where possible.
+Review-derived feature transitions reference normalized review observations where possible.
 
 Undo/reversal is handled through shared reconciliation, not isolated feature-specific counter hacks.
 
-Exact Anki hook/source-review identity mapping must be validated in Phase 0.
+Phase 0 source validation mapped accepted reviews to `gui_hooks.reviewer_did_answer_card`. The source review identity is Anki's `revlog.id`. `state_did_undo` signals that an undo completed but does not identify a review, so Anki Alive emits `ReviewReversed` only after verifying that a tracked source revlog row disappeared.
+
+The mapping is covered by fake-host integration tests. A real Anki review/undo smoke test remains the final host confirmation before Phase 1 durable review-derived progression is unlocked.
 
 ---
 
@@ -246,51 +248,76 @@ with `NemesisReturned` history.
 
 ---
 
-## Proposed / Phase 0 Validation
+## Phase 0 Decisions
 
 ### ADR-P01 — Minimum Supported Anki Version
 
-Status: PROPOSED
+Status: ACCEPTED PROVISIONALLY / MANUAL HOST CONFIRMATION PENDING
 
-Resolve during Phase 0 using current host APIs and test evidence.
+Minimum supported Anki version is **25.02.7** (`min_point_version: 250207`).
+
+Rationale:
+
+- required modern GUI hooks are present in the 25.02.7 upstream source,
+- Anki's 25.02.7 Python project baseline is Python 3.9,
+- Anki Alive CI covers Python 3.9 and 3.13,
+- choosing an older version would widen the manual compatibility surface without Phase 0 evidence that it benefits the product.
+
+The packaged manifest declares the minimum natively. A real 25.02.7-or-newer Anki smoke test is required before removing the provisional qualifier.
 
 ---
 
 ### ADR-P02 — Exact Review Hook and Undo Mapping
 
-Status: PROPOSED / HIGH PRIORITY
+Status: ACCEPTED / MANUAL HOST CONFIRMATION PENDING
 
-Resolve:
+Mapping:
 
-- question shown,
-- answer shown,
-- grade accepted,
-- source review identity,
-- undo/reversal.
+- accepted grade notification: `gui_hooks.reviewer_did_answer_card`,
+- source review identity: `revlog.id`,
+- normalized observation identity: deterministic UUID derived from `(profile_key, revlog.id)`,
+- undo notification: `gui_hooks.state_did_undo`,
+- reversal proof: tracked revlog row no longer exists after undo.
+
+Do not infer a review reversal from the undo operation label and do not decrement feature state blindly.
 
 ---
 
 ### ADR-P03 — Frontend Rendering Stack
 
-Status: PROPOSED
+Status: ACCEPTED FOR PHASE 0
 
-Choose the smallest stack justified by real UI needs.
+Phase 0 uses host webview-compatible HTML/CSS primitives and semantic CSS tokens. No frontend framework is introduced yet.
+
+A framework may be adopted in a later phase only when a concrete UI need justifies its runtime, build, and maintenance cost.
 
 ---
 
 ### ADR-P04 — SQLite Journal / Backup Strategy
 
-Status: PROPOSED
+Status: ACCEPTED
 
-Validate connection lifecycle, journal mode, backup behavior, and corruption recovery.
+The sidecar database uses:
+
+- WAL journal mode,
+- foreign keys enabled,
+- a 5-second busy timeout,
+- explicit transactions,
+- integrity-check support,
+- SQLite online backup support,
+- graceful WAL checkpoint on close.
+
+The database lives under add-on-owned `user_files` so Anki upgrades preserve it. Phase 0 creates only `schema_meta` and `migration_history`.
 
 ---
 
 ### ADR-P05 — Profile Identity Strategy
 
-Status: PROPOSED
+Status: ACCEPTED
 
-Choose stable local profile/collection scoping that does not rely on display name alone.
+Anki Alive creates an add-on-owned UUID inside the active Anki profile folder. The identity therefore survives profile folder rename and does not rely on display name alone.
+
+Source review observation identity incorporates this profile key so local revlog IDs cannot collide across profiles.
 
 ---
 
