@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 BUSY_TIMEOUT_MS = 5_000
 
 
@@ -87,7 +87,8 @@ class Database:
             row = connection.execute(
                 "SELECT schema_version FROM schema_meta WHERE singleton = 1"
             ).fetchone()
-            if row is None:
+            fresh_install = row is None
+            if fresh_install:
                 current_version = 1
                 connection.execute(
                     "INSERT INTO schema_meta(singleton, schema_version) VALUES (1, 1)"
@@ -102,8 +103,14 @@ class Database:
 
             if current_version < 2:
                 self._apply_phase1_schema(connection)
-                self._record_migration(connection, 2)
+                if not fresh_install:
+                    self._record_migration(connection, 2)
                 current_version = 2
+
+            if current_version < 3:
+                self._apply_presentation_schema(connection)
+                self._record_migration(connection, 3)
+                current_version = 3
 
             connection.execute(
                 """
@@ -190,5 +197,35 @@ class Database:
             """
             CREATE INDEX IF NOT EXISTS idx_expedition_review_source
             ON expedition_review_observations(expedition_id, source_review_id, card_id)
+            """
+        )
+
+    @staticmethod
+    def _apply_presentation_schema(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS presentation_events (
+                presentation_event_id TEXT PRIMARY KEY,
+                profile_key TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                prominence INTEGER NOT NULL,
+                priority INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (
+                    status IN (
+                        'PENDING', 'SHOWN', 'DISMISSED', 'DEFERRED',
+                        'SUPPRESSED', 'INVALIDATED'
+                    )
+                ),
+                dedupe_key TEXT NOT NULL UNIQUE,
+                payload_json TEXT NOT NULL DEFAULT '{}',
+                resolved_at TEXT
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_presentation_profile_status
+            ON presentation_events(profile_key, status, created_at)
             """
         )

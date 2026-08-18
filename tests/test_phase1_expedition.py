@@ -8,7 +8,7 @@ from anki_alive.core.review import ReviewObservation, ReviewReversed, new_observ
 from anki_alive.core.time import FixedClock
 from anki_alive.expedition import ExpeditionRepository, ExpeditionService, ExpeditionStatus
 from anki_alive.expedition.events import CheckpointReached, ExpeditionCompleted, ExpeditionProgressed
-from anki_alive.storage import Database
+from anki_alive.storage import Database, SCHEMA_VERSION
 
 
 class SequenceIds:
@@ -48,7 +48,10 @@ def test_phase1_schema_and_checkpoint_plan_are_durable() -> None:
         assert [item.target_progress for item in checkpoints] == [13, 27, 40]
         assert database.connection.execute(
             "SELECT schema_version FROM schema_meta WHERE singleton = 1"
-        ).fetchone()[0] == 2
+        ).fetchone()[0] == SCHEMA_VERSION
+        assert database.connection.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'presentation_events'"
+        ).fetchone() == ("presentation_events",)
         database.close()
 
 

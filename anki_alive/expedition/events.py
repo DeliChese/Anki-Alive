@@ -51,3 +51,12 @@ class ExpeditionCompleted:
     expedition_id: UUID
     completed_reviews: int
     target_reviews: int
+
+
+@dataclass(frozen=True)
+class ExpeditionReopened:
+    """A previously completed Expedition became active again after reconciliation."""
+
+    expedition_id: UUID
+    completed_reviews: int
+    target_reviews: int

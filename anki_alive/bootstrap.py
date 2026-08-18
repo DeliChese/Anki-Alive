@@ -15,6 +15,7 @@ from anki_alive.integration.expedition_ui import ExpeditionUiRuntime
 from anki_alive.integration.hooks import AnkiHookRuntime
 from anki_alive.integration.settings_adapter import AnkiAddonSettingsAdapter
 from anki_alive.performance import PerformanceTimer, TimingSample
+from anki_alive.presentation import PresentationRepository
 from anki_alive.settings import SettingsService
 from anki_alive.storage import Database
 
@@ -30,6 +31,7 @@ class AddonRuntime:
     expedition_ui: ExpeditionUiRuntime
     database: Database
     expedition: ExpeditionService
+    presentations: PresentationRepository
 
     def close(self) -> None:
         self.database.close()
@@ -117,14 +119,10 @@ def bootstrap(module_name: str) -> AddonRuntime:
         ids=Uuid4Factory(),
         local_timezone=local_timezone,
     )
-    event_bus.subscribe(
-        ReviewObservation,
-        expedition.on_review_observation,
-    )
-    event_bus.subscribe(
-        ReviewReversed,
-        expedition.on_review_reversed,
-    )
+    event_bus.subscribe(ReviewObservation, expedition.on_review_observation)
+    event_bus.subscribe(ReviewReversed, expedition.on_review_reversed)
+
+    presentations = PresentationRepository(database)
 
     hooks = AnkiHookRuntime(
         mw=mw,
@@ -146,6 +144,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
         gui_hooks=gui_hooks,
         event_bus=event_bus,
         expedition=expedition,
+        presentations=presentations,
         settings=settings,
         diagnostics=diagnostics,
         deck_browser_type=DeckBrowser,
@@ -165,6 +164,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
         expedition_ui=expedition_ui,
         database=database,
         expedition=expedition,
+        presentations=presentations,
     )
     diagnostics.emit(
         "bootstrap_complete",

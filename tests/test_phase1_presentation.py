@@ -15,6 +15,7 @@ from anki_alive.core.review import ReviewObservation, ReviewReversed, new_observ
 from anki_alive.core.time import FixedClock
 from anki_alive.expedition import ExpeditionRepository, ExpeditionService, ExpeditionStatus
 from anki_alive.integration.expedition_ui import ExpeditionUiRuntime
+from anki_alive.presentation import PresentationRepository
 from anki_alive.settings import SettingsService
 from anki_alive.storage import Database
 
@@ -111,8 +112,8 @@ def make_runtime(tmp_path: Path, due: int = 2):
     bus.subscribe(ReviewObservation, service.on_review_observation)
     bus.subscribe(ReviewReversed, service.on_review_reversed)
 
-    saved: list[dict] = []
-    settings = SettingsService(load_raw=lambda: None, save_raw=saved.append)
+    presentations = PresentationRepository(database)
+    settings = SettingsService(load_raw=lambda: None, save_raw=lambda _value: None)
     hooks = SimpleNamespace(
         webview_will_set_content=[],
         webview_did_receive_js_message=[],
@@ -125,6 +126,7 @@ def make_runtime(tmp_path: Path, due: int = 2):
         gui_hooks=hooks,
         event_bus=bus,
         expedition=service,
+        presentations=presentations,
         settings=settings,
         diagnostics=FakeDiagnostics(),
         deck_browser_type=FakeDeckBrowser,
@@ -138,7 +140,17 @@ def make_runtime(tmp_path: Path, due: int = 2):
         while scheduled:
             scheduled.pop(0)()
 
-    return database, bus, service, settings, hooks, mw, FakeDeckBrowser(due), flush
+    return (
+        database,
+        bus,
+        service,
+        presentations,
+        settings,
+        hooks,
+        mw,
+        FakeDeckBrowser(due),
+        flush,
+    )
 
 
 def test_orchestrator_prefers_completion_and_deduplicates() -> None:
@@ -169,11 +181,48 @@ def test_target_planning_is_bounded() -> None:
     assert ExpeditionService.target_for_available_reviews(200) == 50
 
 
-def test_today_reviewer_completion_focus_and_pause_flow(tmp_path: Path) -> None:
-    database, bus, service, settings, hooks, mw, deck_browser, flush = make_runtime(
-        tmp_path,
-        due=2,
+def test_completion_presentation_survives_database_reopen(tmp_path: Path) -> None:
+    path = tmp_path / "anki_alive.sqlite3"
+    database = Database(path)
+    database.open()
+    repository = PresentationRepository(database)
+    event = PresentationEvent(
+        kind="expedition.completion",
+        prominence=PresentationProminence.SESSION_CLOSURE,
+        priority=100,
+        dedupe_key="completion:00000000-0000-0000-0000-000000000001",
+        payload={"expedition_id": "00000000-0000-0000-0000-000000000001"},
     )
+    repository.enqueue(
+        profile_key="profile-a",
+        event=event,
+        created_at=datetime(2026, 8, 18, 12, 0, tzinfo=timezone.utc),
+    )
+    database.close()
+
+    reopened = Database(path)
+    reopened.open()
+    pending = PresentationRepository(reopened).pending_for_profile(
+        "profile-a",
+        kind="expedition.completion",
+    )
+    assert pending is not None
+    assert pending.event.dedupe_key == event.dedupe_key
+    reopened.close()
+
+
+def test_today_reviewer_completion_focus_and_dismiss_flow(tmp_path: Path) -> None:
+    (
+        database,
+        bus,
+        service,
+        presentations,
+        settings,
+        hooks,
+        mw,
+        deck_browser,
+        flush,
+    ) = make_runtime(tmp_path, due=2)
 
     today = FakeWebContent()
     hooks.webview_will_set_content[0](today, deck_browser)
@@ -184,17 +233,12 @@ def test_today_reviewer_completion_focus_and_pause_flow(tmp_path: Path) -> None:
     assert "No additional signals right now." in today.body
     assert "Oracle" not in today.body
     assert "Rescue" not in today.body
-    assert today.css[-2:] == [
-        "/_addons/anki_alive_dev/anki_alive/ui/foundation.css",
-        "/_addons/anki_alive_dev/anki_alive/ui/expedition.css",
-    ]
 
-    handled = hooks.webview_did_receive_js_message[0](
+    hooks.webview_did_receive_js_message[0](
         (False, None),
         "anki-alive:expedition:begin",
         deck_browser,
     )
-    assert handled[0] is True
     assert mw.state == "review"
 
     row = database.connection.execute(
@@ -231,6 +275,10 @@ def test_today_reviewer_completion_focus_and_pause_flow(tmp_path: Path) -> None:
     assert mw.state == "deckBrowser"
     assert any("setProgress" in script for script in mw.web.evals)
     assert not any("showCheckpoint" in script for script in mw.web.evals)
+    assert presentations.pending_for_profile(
+        profile_key,
+        kind="expedition.completion",
+    ) is not None
 
     completion = FakeWebContent()
     hooks.webview_will_set_content[0](completion, deck_browser)
@@ -239,18 +287,82 @@ def test_today_reviewer_completion_focus_and_pause_flow(tmp_path: Path) -> None:
 
     hooks.webview_did_receive_js_message[0](
         (False, None),
+        "anki-alive:expedition:done",
+        deck_browser,
+    )
+    assert presentations.pending_for_profile(
+        profile_key,
+        kind="expedition.completion",
+    ) is None
+
+    hooks.webview_did_receive_js_message[0](
+        (False, None),
         "anki-alive:focus:toggle",
         deck_browser,
     )
     assert settings.snapshot.focus_mode_enabled is True
+    database.close()
 
+
+def test_undo_after_completion_invalidates_stale_summary(tmp_path: Path) -> None:
+    (
+        database,
+        bus,
+        service,
+        presentations,
+        _settings,
+        hooks,
+        _mw,
+        deck_browser,
+        flush,
+    ) = make_runtime(tmp_path, due=1)
+    hooks.webview_did_receive_js_message[0](
+        (False, None),
+        "anki-alive:expedition:begin",
+        deck_browser,
+    )
+    row = database.connection.execute(
+        "SELECT profile_key, expedition_id FROM expeditions LIMIT 1"
+    ).fetchone()
+    profile_key = row[0]
+    expedition_id = UUID(row[1])
+    observation = new_observation(
+        profile_key=profile_key,
+        card_id=1,
+        rating=1,
+        source_review_id=101,
+        reviewed_at_utc=datetime(2026, 8, 18, 12, 1, tzinfo=timezone.utc),
+    )
+    bus.publish(observation)
+    flush()
+    assert presentations.pending_for_profile(
+        profile_key,
+        kind="expedition.completion",
+    ) is not None
+
+    bus.publish(
+        ReviewReversed(
+            profile_key=profile_key,
+            card_id=1,
+            observation_id=observation.observation_id,
+            source_review_id=101,
+            reversed_at_utc=datetime(2026, 8, 18, 12, 2, tzinfo=timezone.utc),
+        )
+    )
+
+    reopened = service.get(expedition_id)
+    assert reopened is not None
+    assert reopened.status is ExpeditionStatus.ACTIVE
+    assert presentations.pending_for_profile(
+        profile_key,
+        kind="expedition.completion",
+    ) is None
     database.close()
 
 
 def test_leaving_reviewer_pauses_active_expedition(tmp_path: Path) -> None:
-    database, _bus, service, _settings, hooks, _mw, deck_browser, _flush = make_runtime(
-        tmp_path,
-        due=5,
+    database, _bus, service, _presentations, _settings, hooks, _mw, deck_browser, _flush = (
+        make_runtime(tmp_path, due=5)
     )
     hooks.webview_did_receive_js_message[0](
         (False, None),

@@ -15,6 +15,7 @@ from .events import (
     ExpeditionPaused,
     ExpeditionPlanned,
     ExpeditionProgressed,
+    ExpeditionReopened,
     ExpeditionResumed,
     ExpeditionStarted,
 )
@@ -253,14 +254,24 @@ class ExpeditionService:
         expedition = self.repository.expedition_for_reversal(event)
         if expedition is None:
             return
+        was_completed = expedition.status is ExpeditionStatus.COMPLETED
         updated, _, changed = self.repository.apply_reversal(
             expedition.expedition_id,
             event,
             self.clock.now_utc(),
         )
-        if changed:
+        if not changed:
+            return
+        self.event_bus.publish(
+            ExpeditionProgressed(
+                updated.expedition_id,
+                updated.completed_reviews,
+                updated.target_reviews,
+            )
+        )
+        if was_completed and updated.status is ExpeditionStatus.ACTIVE:
             self.event_bus.publish(
-                ExpeditionProgressed(
+                ExpeditionReopened(
                     updated.expedition_id,
                     updated.completed_reviews,
                     updated.target_reviews,

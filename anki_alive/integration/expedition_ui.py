@@ -15,22 +15,19 @@ from anki_alive.expedition.events import (
     CheckpointReached,
     ExpeditionCompleted,
     ExpeditionProgressed,
+    ExpeditionReopened,
 )
 from anki_alive.expedition.model import Expedition, ExpeditionStatus
 from anki_alive.expedition.service import ExpeditionService
 from anki_alive.expedition.viewmodel import build_expedition_view
 from anki_alive.integration.profile import load_or_create_profile_key
+from anki_alive.presentation import PresentationRepository
 from anki_alive.settings import SettingsService
 from anki_alive.ui.expedition import render_review_strip, render_today
 
 
 class ExpeditionUiRuntime:
-    """Thin Anki UI adapter for Phase 1 Expedition presentation.
-
-    Domain policy stays in ExpeditionService. This adapter reads projections,
-    augments Anki's existing WebViews, and turns domain events into small
-    presentation updates.
-    """
+    """Thin Anki UI adapter for Phase 1 Expedition presentation."""
 
     def __init__(
         self,
@@ -39,6 +36,7 @@ class ExpeditionUiRuntime:
         gui_hooks: Any,
         event_bus: EventBus,
         expedition: ExpeditionService,
+        presentations: PresentationRepository,
         settings: SettingsService,
         diagnostics: Any,
         deck_browser_type: type[Any],
@@ -50,6 +48,7 @@ class ExpeditionUiRuntime:
         self._gui_hooks = gui_hooks
         self._event_bus = event_bus
         self._expedition = expedition
+        self._presentations = presentations
         self._settings = settings
         self._diagnostics = diagnostics
         self._deck_browser_type = deck_browser_type
@@ -58,8 +57,6 @@ class ExpeditionUiRuntime:
         self._schedule = schedule
         self._orchestrator = EventOrchestrator()
         self._flush_scheduled = False
-        self._pending_completion_id: UUID | None = None
-        self._dismissed_completion_ids: set[UUID] = set()
         self._registered = False
 
     def register(self) -> None:
@@ -85,10 +82,17 @@ class ExpeditionUiRuntime:
             ExpeditionCompleted,
             self._on_expedition_completed,
         )
+        self._event_bus.subscribe(
+            ExpeditionReopened,
+            self._on_expedition_reopened,
+        )
         self._registered = True
 
     def _profile_key(self) -> str:
         return load_or_create_profile_key(self._mw.pm.profileFolder())
+
+    def _now(self):
+        return self._expedition.clock.now_utc()
 
     def _ensure_assets(self, web_content: Any) -> None:
         for stylesheet in (
@@ -119,11 +123,7 @@ class ExpeditionUiRuntime:
                     else ()
                 )
                 proposed_target = None
-                if (
-                    resumable is None
-                    and completion is None
-                    and due_reviews > 0
-                ):
+                if resumable is None and completion is None and due_reviews > 0:
                     proposed_target = self._expedition.target_for_available_reviews(
                         due_reviews
                     )
@@ -151,10 +151,7 @@ class ExpeditionUiRuntime:
             if isinstance(context, self._reviewer_type):
                 profile_key = self._profile_key()
                 expedition = self._expedition.resumable(profile_key)
-                if (
-                    expedition is None
-                    or expedition.status is not ExpeditionStatus.ACTIVE
-                ):
+                if expedition is None or expedition.status is not ExpeditionStatus.ACTIVE:
                     return
                 self._ensure_assets(web_content)
                 snapshot = self._settings.snapshot
@@ -254,22 +251,43 @@ class ExpeditionUiRuntime:
         }:
             self._expedition.end(expedition.expedition_id)
 
+    def _completion_event(self, expedition_id: UUID) -> PresentationEvent:
+        return PresentationEvent(
+            kind="expedition.completion",
+            prominence=PresentationProminence.SESSION_CLOSURE,
+            priority=100,
+            dedupe_key=f"completion:{expedition_id}",
+            payload={"expedition_id": str(expedition_id)},
+        )
+
     def _dismiss_completion(self) -> None:
-        if self._pending_completion_id is not None:
-            self._dismissed_completion_ids.add(self._pending_completion_id)
-        self._pending_completion_id = None
+        profile_key = self._profile_key()
+        stored = self._presentations.pending_for_profile(
+            profile_key,
+            kind="expedition.completion",
+        )
+        if stored is None or stored.event.dedupe_key is None:
+            return
+        self._presentations.dismiss(stored.event.dedupe_key, at=self._now())
 
     def _completion_for_profile(self, profile_key: str) -> Expedition | None:
-        if self._pending_completion_id is None:
+        stored = self._presentations.pending_for_profile(
+            profile_key,
+            kind="expedition.completion",
+        )
+        if stored is None:
             return None
-        if self._pending_completion_id in self._dismissed_completion_ids:
+        expedition_id_value = stored.event.payload.get("expedition_id")
+        if not expedition_id_value:
+            self._presentations.invalidate(
+                stored.event.dedupe_key or "",
+                at=self._now(),
+            )
             return None
-        expedition = self._expedition.get(self._pending_completion_id)
-        if (
-            expedition is None
-            or expedition.profile_key != profile_key
-            or expedition.status is not ExpeditionStatus.COMPLETED
-        ):
+        expedition = self._expedition.get(UUID(str(expedition_id_value)))
+        if expedition is None or expedition.status is not ExpeditionStatus.COMPLETED:
+            if stored.event.dedupe_key:
+                self._presentations.invalidate(stored.event.dedupe_key, at=self._now())
             return None
         return expedition
 
@@ -319,10 +337,7 @@ class ExpeditionUiRuntime:
     def _on_reviewer_will_end(self) -> None:
         try:
             expedition = self._expedition.resumable(self._profile_key())
-            if (
-                expedition is not None
-                and expedition.status is ExpeditionStatus.ACTIVE
-            ):
+            if expedition is not None and expedition.status is ExpeditionStatus.ACTIVE:
                 self._expedition.pause(expedition.expedition_id)
         except Exception as error:
             self._diagnostics.emit(
@@ -341,14 +356,13 @@ class ExpeditionUiRuntime:
                 expedition,
                 self._expedition.checkpoints(expedition.expedition_id),
             )
-            payload = {
-                "completed_reviews": view.completed_reviews,
-                "target_reviews": view.target_reviews,
-                "reviews_to_next_checkpoint": view.reviews_to_next_checkpoint,
-            }
             self._eval_review_js(
                 "setProgress",
-                payload,
+                {
+                    "completed_reviews": view.completed_reviews,
+                    "target_reviews": view.target_reviews,
+                    "reviews_to_next_checkpoint": view.reviews_to_next_checkpoint,
+                },
             )
 
         self._schedule(update)
@@ -369,18 +383,22 @@ class ExpeditionUiRuntime:
         self._schedule_boundary_flush()
 
     def _on_expedition_completed(self, event: ExpeditionCompleted) -> None:
-        self._orchestrator.enqueue(
-            PresentationEvent(
-                kind="expedition.completion",
-                prominence=PresentationProminence.SESSION_CLOSURE,
-                priority=100,
-                dedupe_key=f"completion:{event.expedition_id}",
-                payload={
-                    "expedition_id": str(event.expedition_id),
-                },
-            )
+        expedition = self._expedition.get(event.expedition_id)
+        if expedition is None:
+            return
+        presentation = self._completion_event(event.expedition_id)
+        self._presentations.enqueue(
+            profile_key=expedition.profile_key,
+            event=presentation,
+            created_at=self._now(),
         )
+        self._orchestrator.enqueue(presentation)
         self._schedule_boundary_flush()
+
+    def _on_expedition_reopened(self, event: ExpeditionReopened) -> None:
+        presentation = self._completion_event(event.expedition_id)
+        if presentation.dedupe_key:
+            self._presentations.invalidate(presentation.dedupe_key, at=self._now())
 
     def _schedule_boundary_flush(self) -> None:
         if self._flush_scheduled:
@@ -392,8 +410,6 @@ class ExpeditionUiRuntime:
         self._flush_scheduled = False
         for event in self._orchestrator.take_boundary():
             if event.kind == "expedition.completion":
-                expedition_id = UUID(str(event.payload["expedition_id"]))
-                self._pending_completion_id = expedition_id
                 if getattr(self._mw, "state", None) == "review":
                     self._mw.moveToState("deckBrowser")
                 continue
