@@ -6,7 +6,7 @@ from uuid import UUID
 from .review import ReviewObservation, ReviewReversed
 
 
-@dataclass(slots=True)
+@dataclass
 class ReversibleReviewCounter:
     """Test-harness projection proving reversal can be reconciled safely.
 
