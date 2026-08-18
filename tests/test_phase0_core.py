@@ -2,13 +2,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from anki_alive.core.events import EventBus
 from anki_alive.core.focus import FocusPolicy
 from anki_alive.core.reconciliation import ReversibleReviewCounter
 from anki_alive.core.review import ReviewObservation, ReviewReversed, new_observation
+from anki_alive.core.time import FixedClock, local_study_date
 from anki_alive.integration.profile import load_or_create_profile_key
 from anki_alive.integration.reviewer import ReviewObserver, SourceReview
+from anki_alive.performance import PerformanceTimer
+from anki_alive.settings import SettingsService
+from anki_alive.storage import Database, SCHEMA_VERSION
 
 
 def test_event_bus_is_idempotent_for_same_handler() -> None:
@@ -140,3 +145,81 @@ def test_review_observer_rejects_mismatched_latest_revlog() -> None:
     )
 
     assert observer.on_answered(card_id=42, rating=3) is None
+
+
+def test_fixed_clock_and_local_study_day_are_explicit() -> None:
+    clock = FixedClock(datetime(2026, 8, 18, 17, 30, tzinfo=timezone.utc))
+    bangkok = ZoneInfo("Asia/Bangkok")
+
+    assert clock.now_utc() == datetime(2026, 8, 18, 17, 30, tzinfo=timezone.utc)
+    assert local_study_date(now_utc=clock.now_utc(), local_timezone=bangkok).isoformat() == "2026-08-19"
+
+
+def test_settings_defaults_invalid_values_and_save() -> None:
+    saved: list[dict] = []
+    service = SettingsService(
+        load_raw=lambda: {
+            "appearance": {"theme": "invalid"},
+            "motion": {"reduced_motion": "yes"},
+            "focus_mode": {"enabled": False, "future_key": 7},
+            "unknown_category": {"ignored": True},
+        },
+        save_raw=saved.append,
+    )
+
+    assert service.snapshot.appearance["theme"] == "system"
+    assert service.snapshot.reduced_motion is False
+    assert service.snapshot.focus_mode_enabled is False
+    assert service.snapshot.focus_mode["future_key"] == 7
+
+    service.set_focus_mode(True)
+    assert service.snapshot.focus_mode_enabled is True
+    assert saved[-1]["focus_mode"]["future_key"] == 7
+    assert "unknown_category" not in saved[-1]
+
+
+def test_database_fresh_reopen_and_transaction_rollback() -> None:
+    with TemporaryDirectory() as temporary_directory:
+        path = Path(temporary_directory) / "anki_alive.sqlite3"
+        database = Database(path)
+        database.open()
+        assert database.connection.execute(
+            "SELECT schema_version FROM schema_meta WHERE singleton = 1"
+        ).fetchone()[0] == SCHEMA_VERSION
+        assert database.connection.execute(
+            "SELECT version FROM migration_history ORDER BY version"
+        ).fetchall() == [(SCHEMA_VERSION,)]
+
+        try:
+            with database.transaction() as connection:
+                connection.execute(
+                    "INSERT INTO migration_history(version) VALUES (?)",
+                    (999,),
+                )
+                raise RuntimeError("force rollback")
+        except RuntimeError:
+            pass
+
+        assert database.connection.execute(
+            "SELECT version FROM migration_history WHERE version = 999"
+        ).fetchone() is None
+        database.close()
+
+        reopened = Database(path)
+        reopened.open()
+        assert reopened.connection.execute(
+            "SELECT schema_version FROM schema_meta WHERE singleton = 1"
+        ).fetchone()[0] == SCHEMA_VERSION
+        reopened.close()
+
+
+def test_performance_timer_records_named_sample() -> None:
+    samples = []
+    timer = PerformanceTimer(samples.append)
+
+    with timer.measure("review-hook"):
+        sum(range(10))
+
+    assert len(samples) == 1
+    assert samples[0].name == "review-hook"
+    assert samples[0].duration_ms >= 0
