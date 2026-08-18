@@ -247,6 +247,13 @@
     --aa-line-subtle: rgba(20, 22, 28, 0.08);
     --aa-line-default: rgba(20, 22, 28, 0.16);
     --aa-line-strong: rgba(20, 22, 28, 0.28);
-    --aa-line-active: rgba(143, 111, 53, 0.58);
+    --aa-line-active: rgba(128, 97, 44, 0.58);
+    --aa-accent-expedition: #80612c;
+    --aa-accent-expedition-soft: rgba(128, 97, 44, 0.10);
+    --aa-accent-expedition-soft-strong: rgba(128, 97, 44, 0.15);
+    --aa-accent-expedition-line: rgba(128, 97, 44, 0.46);
+    --aa-accent-expedition-line-soft: rgba(128, 97, 44, 0.30);
+    --aa-accent-expedition-glow: rgba(128, 97, 44, 0.08);
+    --aa-accent-expedition-wash: rgba(128, 97, 44, 0.045);
   }
 }
