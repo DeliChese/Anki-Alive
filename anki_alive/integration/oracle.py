@@ -31,6 +31,7 @@ class OracleReviewerRuntime:
         self._diagnostics = diagnostics
         self._profile_key: str | None = None
         self._context: ReviewContextService | None = None
+        self._collection: Any | None = None
         self._registered = False
 
     def register(self) -> None:
@@ -41,33 +42,82 @@ class OracleReviewerRuntime:
         self._gui_hooks.reviewer_did_show_question.append(self._on_question_shown)
         self._registered = True
 
-    def _on_collection_loaded(self, collection: Any) -> None:
+        # Add-ons can be reloaded or bootstrapped after collection_did_load has
+        # already fired. Do not leave Oracle permanently inert in that case.
+        collection = getattr(self._mw, "col", None)
+        if collection is not None:
+            try:
+                self._initialize(collection)
+            except Exception as error:
+                # Oracle is optional; never make add-on bootstrap fail because
+                # the host collection/profile is not ready yet.
+                self._diagnostics.emit(
+                    "oracle_context_init_error",
+                    error_type=type(error).__name__,
+                )
+
+    def _initialize(self, collection: Any) -> None:
         self._profile_key = load_or_create_profile_key(self._mw.pm.profileFolder())
+        self._collection = collection
         self._context = ReviewContextService(
             expedition_repository=self._expedition_repository,
             memory_engine=AnkiMemoryEngine(collection),
         )
+        self._diagnostics.emit("oracle_context_ready")
+
+    def _on_collection_loaded(self, collection: Any) -> None:
+        self._initialize(collection)
+
+    def _ensure_context(self) -> bool:
+        collection = getattr(self._mw, "col", None)
+        if collection is None:
+            return False
+        if (
+            self._profile_key is None
+            or self._context is None
+            or self._collection is not collection
+        ):
+            self._initialize(collection)
+        return self._profile_key is not None and self._context is not None
 
     def _on_profile_will_close(self) -> None:
         self._profile_key = None
         self._context = None
+        self._collection = None
 
     def _on_question_shown(self, card: Any) -> None:
-        if self._profile_key is None or self._context is None:
-            return
         try:
+            # Lazy recovery matters for add-on reloads and hosts where Oracle
+            # registration happens after collection_did_load.
+            if not self._ensure_context():
+                self._diagnostics.emit("oracle_context_unavailable")
+                return
+
+            profile_key = self._profile_key
+            context_service = self._context
+            if profile_key is None or context_service is None:
+                return
+
             card_id = int(card.id)
-            context = self._context.for_card(
-                profile_key=self._profile_key,
+            context = context_service.for_card(
+                profile_key=profile_key,
                 card_id=card_id,
             )
             expedition = context.expedition
             snapshot = context.memory_snapshot
-            if (
-                expedition is None
-                or expedition.status is not ExpeditionStatus.ACTIVE
-                or snapshot is None
-            ):
+            if expedition is None or expedition.status is not ExpeditionStatus.ACTIVE:
+                self._diagnostics.emit(
+                    "oracle_candidate_skipped",
+                    card_id=card_id,
+                    reason="no_active_expedition",
+                )
+                return
+            if snapshot is None:
+                self._diagnostics.emit(
+                    "oracle_candidate_skipped",
+                    card_id=card_id,
+                    reason="memory_snapshot_unavailable",
+                )
                 return
 
             # One commitment per five accepted-review progress units, but use
@@ -75,6 +125,11 @@ class OracleReviewerRuntime:
             # whole window when its first card lacks enough evidence.
             allowed_commitments = expedition.completed_reviews // ORACLE_REVIEW_CADENCE + 1
             if self._oracle.commitment_count(expedition.expedition_id) >= allowed_commitments:
+                self._diagnostics.emit(
+                    "oracle_candidate_skipped",
+                    card_id=card_id,
+                    reason="cadence_window_already_used",
+                )
                 return
 
             prediction = self._oracle.commit(
@@ -82,6 +137,14 @@ class OracleReviewerRuntime:
                 snapshot=snapshot,
             )
             if prediction is None:
+                self._diagnostics.emit(
+                    "oracle_candidate_skipped",
+                    card_id=card_id,
+                    reason="policy_ineligible",
+                    review_count=snapshot.review_count,
+                    recent_outcome_count=len(snapshot.recent_outcomes),
+                    has_retrievability=snapshot.retrievability is not None,
+                )
                 return
             self._diagnostics.emit(
                 "oracle_committed",
