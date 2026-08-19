@@ -172,8 +172,12 @@ Future canonical documents are expected to cover:
 
 ## Current Status
 
-**Stage:** Starter Pack / repository foundation
+**Stage:** Phase 1 close / Phase 2 preparation
 
-**Implementation:** Not started
+**Implementation:** Expedition engineering scope is complete on `main`, including durable session ownership, review-driven progress, pause/resume, completion, Undo reconciliation, presentation orchestration foundation, Focus Mode, Reduced Motion handling, accessibility coverage, and performance evidence.
 
-**Next documentation pack:** Product Foundation
+**Phase 1 close gate:** Core real-host gates pass. Two direct visual spot-checks remain before `docs/PHASE1_MANUAL_VALIDATION.md` can truthfully be marked PASS: light appearance and a substantially narrowed Today window.
+
+**Current handoff:** `handoffs/PHASE_1_EXPEDITION_HANDOFF.md`
+
+**Next phase:** Phase 2 — Oracle. Specification/architecture preparation may begin now; formal implementation entry should preserve the Phase 1 close gate and the pre-answer commitment/reveal-after-answer recall-integrity contract.
