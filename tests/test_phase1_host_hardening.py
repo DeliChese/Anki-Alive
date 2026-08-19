@@ -85,3 +85,14 @@ def test_today_surface_reuses_one_web_document_and_is_prewarmed() -> None:
         "QTimer.singleShot(TODAY_PREWARM_DELAY_MS, today_surface.prepare)"
         in bootstrap_source
     )
+
+
+def test_today_reopen_resets_scroll_but_refresh_does_not() -> None:
+    root = Path(__file__).parents[1]
+    window_source = (
+        root / "anki_alive" / "integration" / "today_window.py"
+    ).read_text(encoding="utf-8")
+
+    assert "self._set_content(html, reset_scroll=True)" in window_source
+    assert "self._set_content(html)" in window_source
+    assert 'scroll_command = "window.scrollTo(0, 0);" if reset_scroll else ""' in window_source
