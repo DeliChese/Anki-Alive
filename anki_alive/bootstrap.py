@@ -174,7 +174,12 @@ def bootstrap(module_name: str) -> AddonRuntime:
         report = performance.report(
             ("reviewer_did_answer_card", "state_did_undo")
         )
-        showText(report, parent=mw, title="Anki Alive Performance Snapshot")
+        showText(
+            report,
+            parent=mw,
+            title="Anki Alive Performance Snapshot",
+            copyBtn=True,
+        )
 
     qconnect(performance_action.triggered, show_performance_snapshot)
     mw.form.menuTools.addAction(performance_action)
