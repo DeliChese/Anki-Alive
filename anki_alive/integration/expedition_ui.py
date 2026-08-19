@@ -140,6 +140,8 @@ class ExpeditionUiRuntime:
             )
 
     def _on_top_toolbar_did_init_links(self, links: list[str], toolbar: Any) -> None:
+        if getattr(self._mw, "state", None) == "review":
+            return
         links.append(
             toolbar.create_link(
                 "anki-alive-today",
