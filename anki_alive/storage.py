@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 BUSY_TIMEOUT_MS = 5_000
 
 
@@ -111,6 +111,11 @@ class Database:
                 self._apply_presentation_schema(connection)
                 self._record_migration(connection, 3)
                 current_version = 3
+
+            if current_version < 4:
+                self._apply_oracle_schema(connection)
+                self._record_migration(connection, 4)
+                current_version = 4
 
             connection.execute(
                 """
@@ -227,5 +232,52 @@ class Database:
             """
             CREATE INDEX IF NOT EXISTS idx_presentation_profile_status
             ON presentation_events(profile_key, status, created_at)
+            """
+        )
+
+    @staticmethod
+    def _apply_oracle_schema(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS oracle_predictions (
+                oracle_prediction_id TEXT PRIMARY KEY,
+                expedition_id TEXT NOT NULL REFERENCES expeditions(expedition_id)
+                    ON DELETE CASCADE,
+                card_id INTEGER NOT NULL,
+                committed_at TEXT NOT NULL,
+                policy_version INTEGER NOT NULL,
+                predicted_recall_probability REAL,
+                predicted_outcome TEXT NOT NULL CHECK (
+                    predicted_outcome IN ('RECALL', 'FAIL')
+                ),
+                resolved_at TEXT,
+                actual_rating INTEGER CHECK (actual_rating BETWEEN 1 AND 4),
+                actual_recall_success INTEGER CHECK (actual_recall_success IN (0, 1)),
+                result TEXT CHECK (result IN ('CORRECT', 'INCORRECT')),
+                source_observation_id TEXT,
+                source_review_id INTEGER,
+                reconciliation_state TEXT NOT NULL DEFAULT 'COMMITTED' CHECK (
+                    reconciliation_state IN ('COMMITTED', 'RESOLVED', 'INVALIDATED')
+                )
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_oracle_expedition_card
+            ON oracle_predictions(expedition_id, card_id, committed_at)
+            """
+        )
+        connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_oracle_source_observation
+            ON oracle_predictions(source_observation_id, source_review_id, card_id)
+            """
+        )
+        connection.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_oracle_one_unresolved_per_card
+            ON oracle_predictions(expedition_id, card_id)
+            WHERE resolved_at IS NULL AND reconciliation_state = 'COMMITTED'
             """
         )
