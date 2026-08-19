@@ -1,11 +1,11 @@
 # Phase 1 Completion Freshness Host Finding
 
-Status: FIX IMPLEMENTED; REAL-HOST RE-VALIDATION REQUIRED
+Status: REAL-HOST PASS
 Date: 2026-08-19
 
 A real desktop run exposed a presentation race at Expedition completion.
 
-Observed behavior:
+Observed behavior before the fix:
 
 - the learner finished the real Anki reviews before the Today surface visibly caught up,
 - the first automatically opened Today view could still show stale pre-completion markup,
@@ -36,4 +36,17 @@ Python 3.13 core-tests: PASS
 Probe merged: no
 ```
 
-Real-host re-validation must confirm that completion is correct on first reveal without closing/reopening Today, and that `Done` returns to normal Anki without immediately presenting a new Expedition route.
+Real-host re-validation evidence:
+
+```text
+Date: 2026-08-19
+Completion first reveal: PASS
+Observed completion: 9 / 9, 1 checkpoint
+Remaining native Anki queue shown separately: 3 reviews due
+Done closure: PASS
+Done returned to normal Anki: PASS
+Done did not immediately manufacture a new Expedition: PASS
+Manual screenshot reviewed: yes
+```
+
+Result: PASS. Completion freshness and clean closure are no longer Phase 1 blockers.
