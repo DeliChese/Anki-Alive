@@ -1,20 +1,15 @@
 # Phase 1 — Expedition Handoff
 
-Status: ENGINEERING COMPLETE; FINAL HOST VISUAL GATE PENDING
+Status: COMPLETE
 Date: 2026-08-19
 Phase: 1 — Expedition
 Next phase: 2 — Oracle
 
 ## 1. Executive summary
 
-Phase 1 has a coherent Expedition vertical slice in `main`: durable session ownership, review-driven progress, checkpoints, completion, pause/resume, restart recovery, Undo reconciliation, Focus Mode, Reduced Motion handling, Today/reviewer presentation, performance instrumentation, and the Phase 1 EventOrchestrator foundation.
+Phase 1 is complete on `main`. Expedition ships as a coherent vertical slice with durable session ownership, review-driven progress, checkpoints, completion, pause/resume, restart recovery, Undo reconciliation, Focus Mode, Reduced Motion handling, Today/reviewer presentation, performance instrumentation, and the Phase 1 EventOrchestrator foundation.
 
-Core real-host gates have passed and automated tests cover the remaining deterministic edge behavior. Two direct visual host spot-checks remain before the manual validation document can truthfully move from PENDING to PASS:
-
-- light appearance in the dedicated Today window,
-- substantially narrowed Today window with no clipped core controls or horizontal overflow.
-
-Do not infer those two results. Record them in `docs/PHASE1_MANUAL_VALIDATION.md` when actually exercised.
+Automated coverage and real-host validation are complete for the ordinary-deck Phase 1 path, including the final light-appearance and narrow-window visual gates.
 
 ## 2. Completed scope
 
@@ -42,6 +37,8 @@ Do not infer those two results. Record them in `docs/PHASE1_MANUAL_VALIDATION.md
 - `Done` creates a real stopping point and does not auto-create another Expedition.
 - Focus Mode reduces motivational presentation while retaining necessary numeric progress.
 - Reduced Motion preserves static meaning.
+- Light and dark appearance were validated.
+- Substantially narrowed Today layout was validated without persistent horizontal overflow or clipped core controls.
 - Native/host review flow remains available when Today is hidden, no Expedition is active, an Expedition ends, or completion is dismissed.
 
 ### Shared architecture introduced in Phase 1
@@ -68,7 +65,7 @@ Do not infer those two results. Record them in `docs/PHASE1_MANUAL_VALIDATION.md
 
 ### Real host
 
-Recorded core PASS evidence includes:
+Recorded PASS evidence includes:
 
 - startup and Deck Browser coexistence,
 - dedicated Today window,
@@ -80,9 +77,16 @@ Recorded core PASS evidence includes:
 - Focus Mode,
 - Reduced Motion,
 - keyboard navigation for the tested Today flow,
+- dark appearance,
+- light appearance,
+- narrow-window layout,
 - reviewer/Undo performance samples inside the established hot-path budget.
 
-Canonical evidence: `docs/PHASE1_REAL_HOST_EVIDENCE.md` and `docs/PHASE1_PERFORMANCE_EVIDENCE.md`.
+Canonical evidence:
+
+- `docs/PHASE1_MANUAL_VALIDATION.md`
+- `docs/PHASE1_REAL_HOST_EVIDENCE.md`
+- `docs/PHASE1_PERFORMANCE_EVIDENCE.md`
 
 ### Automated tests
 
@@ -101,25 +105,16 @@ These cover checkpoint behavior, queue exhaustion semantics, duplicate delivery,
 
 ## 5. Known limitations / unclaimed host contexts
 
-The following are not claimed from the ordinary-deck real-host run:
+The following are not separately claimed from the ordinary-deck real-host run:
 
-- filtered deck behavior as a separately validated host path,
-- custom study behavior as a separately validated host path,
-- naturally occurring queue exhaustion before target in the user's collection,
+- filtered deck behavior,
+- custom study behavior,
+- naturally occurring queue exhaustion before target in the project owner's collection,
 - a forced real-host intermediate checkpoint solely for validation.
 
-These are documented limitations, not reasons to mutate a collection unsafely.
+These are documented limitations, not Phase 1 blockers.
 
-## 6. Final Phase 1 close gate
-
-Before changing `docs/PHASE1_MANUAL_VALIDATION.md` to PASS, directly exercise and record:
-
-1. light appearance in `Anki Alive · Today`,
-2. substantially narrowed Today window with no persistent horizontal overflow or clipped core controls.
-
-If either fails, treat it as a Phase 1 UX defect and fix it before declaring the phase fully closed.
-
-## 7. Decisions carried forward
+## 6. Decisions carried forward
 
 - Anki remains authoritative for scheduling, cards, notes, review history, and grading semantics.
 - Expedition is the durable study-session owner.
@@ -129,20 +124,20 @@ If either fails, treat it as a Phase 1 UX defect and fix it before declaring the
 - Future feature presentation must integrate through shared orchestration rather than isolated mini-app behavior.
 - Cross-feature event compression remains deferred until Phase 2 provides a second real feature event to orchestrate.
 
-## 8. Deferred ideas / technical debt
+## 7. Deferred ideas / technical debt
 
 - “One more to closure” remains deliberately deferred pending UX evidence; do not add it automatically.
 - General cross-feature presentation compression is Phase 2+ work.
 - Filtered deck/custom study support should be validated when practical without unsafe collection manipulation.
 - ReviewContextService should be introduced in Phase 2 rather than allowing per-feature hot-path lookups to proliferate.
 
-## 9. Migration notes
+## 8. Migration notes
 
-No new migration is introduced by this handoff.
+Phase 1 closes on sidecar schema version `3`.
 
 Phase 2 must preserve existing Expedition rows and review associations. Oracle must not require rewriting Expedition history or changing Anki collection schema.
 
-## 10. Phase 2 dependencies
+## 9. Phase 2 dependencies
 
 Oracle may rely on the following Phase 1 contracts:
 
@@ -164,12 +159,10 @@ Oracle must add or formalize:
 - Undo/reversal behavior for committed/revealed predictions,
 - crash/restart-safe deferred presentation if the final design requires deferred reveal.
 
-## 11. Phase 2 entry rule
+## 10. Phase 2 entry rule
 
-Phase 2 specification and architecture work may begin immediately from this handoff.
+Phase 2 — Oracle is cleared to enter implementation.
 
-Phase 2 implementation should not be considered formally entered until the two remaining Phase 1 visual host spot-checks are recorded as PASS (or a documented decision explicitly accepts a limitation).
-
-The core invariant remains:
+Start from `docs/PHASE2_ORACLE_ENTRY.md` and preserve the core invariant:
 
 > Oracle may create curiosity, but it must never reveal answer information before recall or bias the learner toward a grading button.
