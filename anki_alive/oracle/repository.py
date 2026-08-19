@@ -72,6 +72,13 @@ class OracleRepository:
         ).fetchone()
         return self._from_row(row) if row else None
 
+    def count_for_expedition(self, expedition_id: UUID) -> int:
+        row = self.database.connection.execute(
+            "SELECT COUNT(*) FROM oracle_predictions WHERE expedition_id = ?",
+            (str(expedition_id),),
+        ).fetchone()
+        return int(row[0]) if row else 0
+
     def committed_for_profile_card(self, profile_key: str, card_id: int) -> OraclePrediction | None:
         row = self.database.connection.execute(
             """
