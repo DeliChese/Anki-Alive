@@ -172,12 +172,14 @@ Future canonical documents are expected to cover:
 
 ## Current Status
 
-**Stage:** Phase 1 close / Phase 2 preparation
+**Stage:** Phase 2 — Oracle
 
-**Implementation:** Expedition engineering scope is complete on `main`, including durable session ownership, review-driven progress, pause/resume, completion, Undo reconciliation, presentation orchestration foundation, Focus Mode, Reduced Motion handling, accessibility coverage, and performance evidence.
-
-**Phase 1 close gate:** Core real-host gates pass. Two direct visual spot-checks remain before `docs/PHASE1_MANUAL_VALIDATION.md` can truthfully be marked PASS: light appearance and a substantially narrowed Today window.
+**Phase 1:** COMPLETE. Expedition engineering, automated coverage, performance evidence, accessibility checks, restart/Undo behavior, and real-host visual validation are closed.
 
 **Current handoff:** `handoffs/PHASE_1_EXPEDITION_HANDOFF.md`
 
-**Next phase:** Phase 2 — Oracle. Specification/architecture preparation may begin now; formal implementation entry should preserve the Phase 1 close gate and the pre-answer commitment/reveal-after-answer recall-integrity contract.
+**Phase 2 entry pack:** `docs/PHASE2_ORACLE_ENTRY.md`
+
+**Implementation focus:** Begin Oracle with the feature-neutral Memory Engine interface and reviewer-time context aggregation, then add durable pre-answer prediction commitment, post-answer reveal, reconciliation, persistence, tests, and presentation integration.
+
+**Recall-integrity gate:** Oracle must commit before the outcome is known, reveal only after the learner answers, and never bias grading or leak answer information before recall.
