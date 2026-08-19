@@ -79,6 +79,26 @@ class OracleRepository:
         ).fetchone()
         return int(row[0]) if row else 0
 
+    def committed_for_expedition_card(
+        self,
+        expedition_id: UUID,
+        card_id: int,
+    ) -> OraclePrediction | None:
+        row = self.database.connection.execute(
+            """
+            SELECT oracle_prediction_id, expedition_id, card_id, committed_at,
+                   policy_version, predicted_recall_probability, predicted_outcome,
+                   resolved_at, actual_rating, actual_recall_success, result,
+                   source_observation_id, source_review_id, reconciliation_state
+            FROM oracle_predictions
+            WHERE expedition_id = ? AND card_id = ?
+              AND resolved_at IS NULL AND reconciliation_state = 'COMMITTED'
+            ORDER BY committed_at DESC LIMIT 1
+            """,
+            (str(expedition_id), card_id),
+        ).fetchone()
+        return self._from_row(row) if row else None
+
     def committed_for_profile_card(self, profile_key: str, card_id: int) -> OraclePrediction | None:
         row = self.database.connection.execute(
             """
