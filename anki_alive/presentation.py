@@ -118,8 +118,14 @@ class PresentationRepository:
             ).fetchone()
         return self._from_row(row) if row else None
 
+    def mark_shown(self, dedupe_key: str, *, at: datetime) -> bool:
+        return self._resolve(dedupe_key, PresentationStatus.SHOWN, at)
+
     def dismiss(self, dedupe_key: str, *, at: datetime) -> bool:
         return self._resolve(dedupe_key, PresentationStatus.DISMISSED, at)
+
+    def suppress(self, dedupe_key: str, *, at: datetime) -> bool:
+        return self._resolve(dedupe_key, PresentationStatus.SUPPRESSED, at)
 
     def invalidate(self, dedupe_key: str, *, at: datetime) -> bool:
         return self._resolve(dedupe_key, PresentationStatus.INVALIDATED, at)
