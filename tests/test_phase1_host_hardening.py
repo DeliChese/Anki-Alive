@@ -78,6 +78,7 @@ def test_today_surface_reuses_one_web_document_and_is_prewarmed() -> None:
     assert window_source.count("self._web.stdHtml(") == 1
     assert "self._dialog.hide()" in window_source
     assert "dialog_self.hide()" in window_source
+    assert "web.requiresCol = False" in window_source
     assert "self._web.eval(" in window_source
     assert "TODAY_PREWARM_DELAY_MS = 1200" in bootstrap_source
     assert (
