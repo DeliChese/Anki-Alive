@@ -48,9 +48,9 @@ class FakeWeb:
 
 
 class FakeCollection:
-    def __init__(self) -> None:
-        self.sched = SimpleNamespace(counts=lambda: (2, 0, 0))
-        self.decks = SimpleNamespace(current=lambda: {"name": "Fallback deck"})
+    def __init__(self, due: int) -> None:
+        self.sched = SimpleNamespace(counts=lambda: (due, 0, 0))
+        self.decks = SimpleNamespace(current=lambda: {"name": "Biology"})
         self.timebox_starts = 0
 
     def startTimebox(self) -> None:
@@ -58,9 +58,9 @@ class FakeCollection:
 
 
 class FakeMw:
-    def __init__(self, profile_folder: str) -> None:
+    def __init__(self, profile_folder: str, due: int) -> None:
         self.pm = SimpleNamespace(profileFolder=lambda: profile_folder)
-        self.col = FakeCollection()
+        self.col = FakeCollection(due)
         self.web = FakeWeb()
         self.reviewer = SimpleNamespace(card=object())
         self.state = "deckBrowser"
@@ -69,23 +69,6 @@ class FakeMw:
     def moveToState(self, state: str) -> None:
         self.state = state
         self.transitions.append(state)
-
-
-class FakeDeckBrowser:
-    def __init__(self, due: int = 2) -> None:
-        node = SimpleNamespace(
-            deck_id=1,
-            name="Biology",
-            new_count=due,
-            learn_count=0,
-            review_count=0,
-            children=[],
-        )
-        self._render_data = SimpleNamespace(tree=node, current_deck_id=1)
-        self.refresh_count = 0
-
-    def refresh(self) -> None:
-        self.refresh_count += 1
 
 
 class FakeReviewer:
@@ -97,6 +80,46 @@ class FakeWebContent:
         self.body = "<main>Anki</main>"
         self.css: list[str] = []
         self.js: list[str] = []
+
+
+class FakeTodaySurface:
+    def __init__(self) -> None:
+        self.handler = None
+        self.html = ""
+        self.is_open = False
+        self.show_count = 0
+        self.refresh_count = 0
+        self.close_count = 0
+
+    def set_command_handler(self, handler) -> None:
+        self.handler = handler
+
+    def show(self, html: str) -> None:
+        self.html = html
+        self.is_open = True
+        self.show_count += 1
+
+    def refresh(self, html: str) -> None:
+        if self.is_open:
+            self.html = html
+            self.refresh_count += 1
+
+    def close(self) -> None:
+        self.is_open = False
+        self.close_count += 1
+
+    def command(self, message: str) -> None:
+        assert self.handler is not None
+        self.handler(message)
+
+
+class FakeToolbar:
+    def __init__(self) -> None:
+        self.handlers: dict[str, object] = {}
+
+    def create_link(self, cmd, label, func, tip=None, id=None):
+        self.handlers[cmd] = func
+        return f'<a id="{id}" title="{tip}">{label}</a>'
 
 
 def make_runtime(tmp_path: Path, due: int = 2):
@@ -117,10 +140,11 @@ def make_runtime(tmp_path: Path, due: int = 2):
     settings = SettingsService(load_raw=lambda: None, save_raw=lambda _value: None)
     hooks = SimpleNamespace(
         webview_will_set_content=[],
-        webview_did_receive_js_message=[],
+        top_toolbar_did_init_links=[],
         reviewer_will_end=[],
     )
-    mw = FakeMw(str(tmp_path / "profile"))
+    mw = FakeMw(str(tmp_path / "profile"), due)
+    today = FakeTodaySurface()
     scheduled: list = []
     ui = ExpeditionUiRuntime(
         mw=mw,
@@ -130,8 +154,8 @@ def make_runtime(tmp_path: Path, due: int = 2):
         presentations=presentations,
         settings=settings,
         diagnostics=FakeDiagnostics(),
-        deck_browser_type=FakeDeckBrowser,
         reviewer_type=FakeReviewer,
+        today_surface=today,
         asset_base="/_addons/anki_alive_dev/anki_alive/ui",
         schedule=scheduled.append,
     )
@@ -141,17 +165,7 @@ def make_runtime(tmp_path: Path, due: int = 2):
         while scheduled:
             scheduled.pop(0)()
 
-    return (
-        database,
-        bus,
-        service,
-        presentations,
-        settings,
-        hooks,
-        mw,
-        FakeDeckBrowser(due),
-        flush,
-    )
+    return database, bus, service, presentations, settings, hooks, mw, today, flush
 
 
 def test_orchestrator_prefers_completion_and_deduplicates() -> None:
@@ -212,7 +226,7 @@ def test_completion_presentation_survives_database_reopen(tmp_path: Path) -> Non
     reopened.close()
 
 
-def test_today_reviewer_completion_focus_and_dismiss_flow(tmp_path: Path) -> None:
+def test_today_is_dedicated_and_reviewer_flow_stays_intact(tmp_path: Path) -> None:
     (
         database,
         bus,
@@ -221,26 +235,34 @@ def test_today_reviewer_completion_focus_and_dismiss_flow(tmp_path: Path) -> Non
         settings,
         hooks,
         mw,
-        deck_browser,
+        today,
         flush,
     ) = make_runtime(tmp_path, due=2)
 
-    today = FakeWebContent()
-    hooks.webview_will_set_content[0](today, deck_browser)
-    assert 'id="anki-alive-today"' in today.body
-    assert "Memory core" in today.body
-    assert '<span class="aa-type-metric-large">2</span>' in today.body
-    assert "reviews due" in today.body
-    assert "Begin Expedition" in today.body
-    assert "No additional signals right now." in today.body
-    assert "Oracle" not in today.body
-    assert "Rescue" not in today.body
+    host_surface = FakeWebContent()
+    hooks.webview_will_set_content[0](host_surface, object())
+    assert host_surface.body == "<main>Anki</main>"
+    assert host_surface.css == []
+    assert host_surface.js == []
 
-    hooks.webview_did_receive_js_message[0](
-        (False, None),
-        "anki-alive:expedition:begin",
-        deck_browser,
-    )
+    toolbar = FakeToolbar()
+    links: list[str] = []
+    hooks.top_toolbar_did_init_links[0](links, toolbar)
+    assert "anki-alive-today-link" in links[0]
+    toolbar.handlers["anki-alive-today"]()
+
+    assert today.is_open is True
+    assert 'id="anki-alive-today"' in today.html
+    assert "Memory core" in today.html
+    assert ">2</span>" in today.html
+    assert "reviews due" in today.html
+    assert "Begin Expedition" in today.html
+    assert "No additional signals right now." in today.html
+    assert "Oracle" not in today.html
+    assert "Rescue" not in today.html
+
+    today.command("anki-alive:expedition:begin")
+    assert today.is_open is False
     assert mw.state == "review"
 
     row = database.connection.execute(
@@ -281,48 +303,26 @@ def test_today_reviewer_completion_focus_and_dismiss_flow(tmp_path: Path) -> Non
         profile_key,
         kind="expedition.completion",
     ) is not None
+    assert today.is_open is True
+    assert "EXPEDITION COMPLETE" in today.html
+    assert "Continue reviewing" in today.html
 
-    completion = FakeWebContent()
-    hooks.webview_will_set_content[0](completion, deck_browser)
-    assert "EXPEDITION COMPLETE" in completion.body
-    assert "Continue reviewing" in completion.body
-
-    hooks.webview_did_receive_js_message[0](
-        (False, None),
-        "anki-alive:expedition:done",
-        deck_browser,
-    )
+    today.command("anki-alive:expedition:done")
     assert presentations.pending_for_profile(
         profile_key,
         kind="expedition.completion",
     ) is None
 
-    hooks.webview_did_receive_js_message[0](
-        (False, None),
-        "anki-alive:focus:toggle",
-        deck_browser,
-    )
+    today.command("anki-alive:focus:toggle")
     assert settings.snapshot.focus_mode_enabled is True
     database.close()
 
 
 def test_undo_after_completion_invalidates_stale_summary(tmp_path: Path) -> None:
-    (
-        database,
-        bus,
-        service,
-        presentations,
-        _settings,
-        hooks,
-        _mw,
-        deck_browser,
-        flush,
-    ) = make_runtime(tmp_path, due=1)
-    hooks.webview_did_receive_js_message[0](
-        (False, None),
-        "anki-alive:expedition:begin",
-        deck_browser,
+    database, bus, service, presentations, _settings, _hooks, _mw, today, flush = (
+        make_runtime(tmp_path, due=1)
     )
+    today.command("anki-alive:expedition:begin")
     row = database.connection.execute(
         "SELECT profile_key, expedition_id FROM expeditions LIMIT 1"
     ).fetchone()
@@ -363,14 +363,10 @@ def test_undo_after_completion_invalidates_stale_summary(tmp_path: Path) -> None
 
 
 def test_leaving_reviewer_with_card_pauses_active_expedition(tmp_path: Path) -> None:
-    database, _bus, service, _presentations, _settings, hooks, mw, deck_browser, _flush = (
+    database, _bus, service, _presentations, _settings, hooks, mw, today, _flush = (
         make_runtime(tmp_path, due=5)
     )
-    hooks.webview_did_receive_js_message[0](
-        (False, None),
-        "anki-alive:expedition:begin",
-        deck_browser,
-    )
+    today.command("anki-alive:expedition:begin")
     row = database.connection.execute(
         "SELECT expedition_id FROM expeditions LIMIT 1"
     ).fetchone()
@@ -394,14 +390,10 @@ def test_natural_queue_exhaustion_closes_without_moving_target(tmp_path: Path) -
         _settings,
         hooks,
         mw,
-        deck_browser,
+        today,
         flush,
     ) = make_runtime(tmp_path, due=5)
-    hooks.webview_did_receive_js_message[0](
-        (False, None),
-        "anki-alive:expedition:begin",
-        deck_browser,
-    )
+    today.command("anki-alive:expedition:begin")
     row = database.connection.execute(
         "SELECT profile_key, expedition_id FROM expeditions LIMIT 1"
     ).fetchone()
@@ -423,19 +415,18 @@ def test_natural_queue_exhaustion_closes_without_moving_target(tmp_path: Path) -
         profile_key,
         kind="expedition.completion",
     ) is not None
-
-    completion = FakeWebContent()
-    hooks.webview_will_set_content[0](completion, deck_browser)
-    assert "The available route is complete." in completion.body
-    assert "planned target stayed 5" in completion.body
-    assert "no eligible reviews left" in completion.body
+    assert today.is_open is True
+    assert "The available route is complete." in today.html
+    assert "planned target stayed 5" in today.html
+    assert "no eligible reviews left" in today.html
     database.close()
 
 
-def test_ui_assets_keep_reviewer_quiet() -> None:
+def test_ui_assets_keep_reviewer_quiet_and_today_isolated() -> None:
     root = Path(__file__).parents[1]
     css = (root / "anki_alive" / "ui" / "expedition.css").read_text(encoding="utf-8")
     js = (root / "anki_alive" / "ui" / "expedition.js").read_text(encoding="utf-8")
+    today_css = (root / "anki_alive" / "ui" / "today.css").read_text(encoding="utf-8")
 
     assert "aa-review-strip" in css
     assert "pointer-events: none" in css
@@ -445,3 +436,5 @@ def test_ui_assets_keep_reviewer_quiet() -> None:
     assert "infinite" not in css
     assert "requestAnimationFrame" not in js
     assert "setInterval" not in js
+    assert ".aa-today-window" in today_css
+    assert "var(--aa-bg-canvas)" in today_css
