@@ -14,6 +14,7 @@ from anki_alive.integration.compatibility import ensure_supported_anki_version
 from anki_alive.integration.expedition_ui import ExpeditionUiRuntime
 from anki_alive.integration.hooks import AnkiHookRuntime
 from anki_alive.integration.settings_adapter import AnkiAddonSettingsAdapter
+from anki_alive.integration.today_window import AnkiTodayWindow
 from anki_alive.performance import PerformanceTimer, TimingSample
 from anki_alive.presentation import PresentationRepository
 from anki_alive.settings import SettingsService
@@ -49,8 +50,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
 
     from anki.utils import int_version
     from aqt import gui_hooks, mw
-    from aqt.deckbrowser import DeckBrowser
-    from aqt.qt import QTimer
+    from aqt.qt import QAction, QTimer, qconnect
     from aqt.reviewer import Reviewer
 
     ensure_supported_anki_version(int_version())
@@ -139,6 +139,10 @@ def bootstrap(module_name: str) -> AddonRuntime:
     addon_package = mw.addonManager.addonFromModule(module_name)
     asset_base = f"/_addons/{addon_package}/anki_alive/ui"
 
+    today_surface = AnkiTodayWindow(
+        mw=mw,
+        asset_base=asset_base,
+    )
     expedition_ui = ExpeditionUiRuntime(
         mw=mw,
         gui_hooks=gui_hooks,
@@ -147,12 +151,16 @@ def bootstrap(module_name: str) -> AddonRuntime:
         presentations=presentations,
         settings=settings,
         diagnostics=diagnostics,
-        deck_browser_type=DeckBrowser,
         reviewer_type=Reviewer,
+        today_surface=today_surface,
         asset_base=asset_base,
         schedule=lambda callback: QTimer.singleShot(0, callback),
     )
     expedition_ui.register()
+
+    tools_action = QAction("Anki Alive Today", mw)
+    qconnect(tools_action.triggered, expedition_ui.show_today)
+    mw.form.menuTools.addAction(tools_action)
 
     _runtime = AddonRuntime(
         module_name=module_name,
