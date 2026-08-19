@@ -116,12 +116,20 @@ class OracleReviewerRuntime:
             # A commitment may already exist from an earlier invisible build,
             # restart, or Undo. Re-announce only its neutral presence so the UI
             # can restore "Prediction sealed" without rerolling domain truth.
-            existing = self._oracle.committed_for_expedition_card(
-                expedition.expedition_id,
-                card_id,
+            existing_lookup = getattr(
+                self._oracle,
+                "committed_for_expedition_card",
+                None,
+            )
+            existing = (
+                existing_lookup(expedition.expedition_id, card_id)
+                if callable(existing_lookup)
+                else None
             )
             if existing is not None:
-                self._oracle.announce_commitment(existing)
+                announce = getattr(self._oracle, "announce_commitment", None)
+                if callable(announce):
+                    announce(existing)
                 self._diagnostics.emit(
                     "oracle_commitment_restored",
                     oracle_prediction_id=str(existing.oracle_prediction_id),
