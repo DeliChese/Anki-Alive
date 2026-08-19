@@ -168,6 +168,16 @@ def bootstrap(module_name: str) -> AddonRuntime:
     qconnect(tools_action.triggered, expedition_ui.show_today)
     mw.form.menuTools.addAction(tools_action)
 
+    reduced_motion_action = QAction("Anki Alive Reduced Motion", mw)
+    reduced_motion_action.setCheckable(True)
+    reduced_motion_action.setChecked(settings.snapshot.reduced_motion)
+
+    def set_reduced_motion(enabled: bool) -> None:
+        settings.set_reduced_motion(bool(enabled))
+
+    qconnect(reduced_motion_action.toggled, set_reduced_motion)
+    mw.form.menuTools.addAction(reduced_motion_action)
+
     performance_action = QAction("Anki Alive Performance Snapshot", mw)
 
     def show_performance_snapshot() -> None:
