@@ -20,6 +20,13 @@
     return root;
   }
 
+  function clearTimer() {
+    if (hideTimer !== null) {
+      window.clearTimeout(hideTimer);
+      hideTimer = null;
+    }
+  }
+
   function messageFor(payload) {
     const predictedFail = payload.predicted_outcome === "FAIL";
     const recalled = Boolean(payload.actual_recall_success);
@@ -37,20 +44,32 @@
     return "Oracle missed this one — the memory changed the story.";
   }
 
+  function showCommitment(payload) {
+    const root = ensureReveal();
+    const result = root.querySelector(".aa-oracle-reveal__result");
+    if (result) result.textContent = "Prediction sealed. Reveal after your answer.";
+
+    clearTimer();
+    root.dataset.reducedMotion = payload && payload.reduced_motion ? "true" : "false";
+    root.dataset.state = "committed";
+    root.dataset.visible = "true";
+  }
+
   function showResolution(payload) {
     const root = ensureReveal();
     const result = root.querySelector(".aa-oracle-reveal__result");
     if (result) result.textContent = messageFor(payload || {});
 
+    clearTimer();
     root.dataset.reducedMotion = payload && payload.reduced_motion ? "true" : "false";
+    root.dataset.state = "resolved";
     root.dataset.visible = "true";
 
-    if (hideTimer !== null) window.clearTimeout(hideTimer);
     hideTimer = window.setTimeout(() => {
       root.dataset.visible = "false";
       hideTimer = null;
-    }, 2600);
+    }, 3200);
   }
 
-  window.AnkiAliveOracle = { showResolution };
+  window.AnkiAliveOracle = { showCommitment, showResolution };
 })();
