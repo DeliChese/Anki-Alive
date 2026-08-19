@@ -45,8 +45,12 @@ PASS requires Anki Alive to coexist rather than replace or restyle the Deck Brow
 2. Confirm a separate `Anki Alive · Today` window opens.
 3. Confirm the displayed deck/context name and due count are believable.
 4. Confirm the Today visual canvas is self-contained and does not inherit the Deck Browser skin/background.
-5. Inspect both dark and light appearance.
-6. Press Escape and confirm the Today window can close without affecting Anki.
+5. Confirm no horizontal scrollbar appears at normal desktop width.
+6. Close/hide Today, then reopen it and confirm it appears without the previous multi-second wait.
+7. Repeat open/close/reopen at least twice to exercise the retained WebView path.
+8. Narrow the window substantially and confirm no horizontal overflow appears.
+9. Inspect both dark and light appearance.
+10. Press Escape and confirm the Today window hides without affecting Anki, then reopen it successfully.
 
 PASS requires:
 
@@ -54,14 +58,16 @@ PASS requires:
 - readable typography,
 - restrained amber Expedition signal,
 - no dense RPG/dashboard treatment,
-- no fake future-feature signals.
+- no fake future-feature signals,
+- no persistent horizontal overflow,
+- no repeated multi-second WebEngine recreation on ordinary reopen.
 
 ## C. Begin and review integrity
 
 Use a deck with at least several due cards.
 
 1. Open Today and select `Begin Expedition`.
-2. Confirm the Today window closes and Anki enters normal review.
+2. Confirm the Today window hides and Anki enters normal review.
 3. Confirm the reviewer strip is small, quiet, and does not cover important card content.
 4. Grade at least one card with each rating: Again, Hard, Good, Easy.
 5. Confirm every accepted grade advances Expedition by exactly one.
@@ -154,7 +160,7 @@ Without relying on mouse clicks, validate visible focus and activation for:
 - Done,
 - Continue reviewing,
 - Focus Mode toggle,
-- Escape to close Today.
+- Escape to hide Today and reopen it afterward.
 
 Normal Anki reviewer keyboard shortcuts must continue to work.
 
@@ -162,7 +168,7 @@ Normal Anki reviewer keyboard shortcuts must continue to work.
 
 1. Inspect Today at normal desktop size.
 2. Narrow the Today window substantially.
-3. Confirm it collapses coherently without clipped core controls.
+3. Confirm it collapses coherently without clipped core controls or horizontal overflow.
 4. Test a card with unusually long content.
 5. Confirm the reviewer strip does not obscure the recall-critical region.
 
@@ -172,7 +178,7 @@ Capture screenshots if a visual issue needs follow-up.
 
 Confirm normal Anki review remains possible when:
 
-- Today is closed,
+- Today is closed/hidden,
 - no Expedition is active,
 - an Expedition has been ended,
 - a completion summary was dismissed.
