@@ -22,3 +22,23 @@ This finding supersedes the earlier Phase 1 implementation note that described D
 On 2026-08-19, after pulling/reinstalling the compatibility build, the user reported that the add-on installed and started successfully on the real desktop host with the existing setup. This closes the immediate reinstall/startup blocker introduced by the host-surface refactor.
 
 This evidence is intentionally narrow. It does not by itself mark the full Phase 1 host checklist PASS. The remaining run must still verify the dedicated Today window, native Deck Browser coexistence in use, review progress, checkpoint/completion, pause/resume, undo/restart, Focus Mode, reduced motion, keyboard/layout behavior, filtered/custom-study smoke behavior, and reviewer performance.
+
+## Host-hardening after the smoke pass
+
+The follow-up audit tightened two presentation boundaries before the longer manual run:
+
+- the `Alive` top-toolbar link is suppressed while Anki is in active review, keeping recall chrome quiet;
+- the dedicated Today window minimum size was lowered to 520×420 so the existing responsive 760px breakpoint can be exercised on the real host.
+
+Regression coverage verifies that the toolbar entry is absent in review, present outside review, and that the Today window can reach the responsive layout breakpoint.
+
+Automated verification:
+
+```text
+GitHub Actions workflow: Anki Alive CI
+Probe run: #110
+Python 3.9 core-tests: PASS
+Python 3.13 core-tests: PASS
+Probe PR: #5
+Probe merged: no
+```
