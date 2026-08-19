@@ -65,6 +65,24 @@ class OracleUiRuntime:
         if script not in web_content.js:
             web_content.js.append(script)
 
+        # ExpeditionUiRuntime registers before OracleUiRuntime and owns the
+        # review strip. Its presence is therefore a reliable, non-invasive
+        # signal that this reviewer belongs to an active Expedition. Expose a
+        # tiny runtime status so Phase 2 cannot fail completely invisibly.
+        if (
+            'id="anki-alive-review-strip"' in web_content.body
+            and 'id="anki-alive-oracle-online"' not in web_content.body
+        ):
+            web_content.body += """
+            <div id="anki-alive-oracle-online"
+                 class="anki-alive aa-oracle-online"
+                 role="status"
+                 aria-label="Oracle is online for this Expedition">
+              <span class="aa-oracle-online__name">Oracle</span>
+              <span class="aa-oracle-online__state">online</span>
+            </div>
+            """
+
     def _on_oracle_committed(self, event: OracleCommitted) -> None:
         del event
         self._schedule(self._show_commitment)
