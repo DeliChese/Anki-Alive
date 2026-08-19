@@ -48,7 +48,7 @@ class AnkiTodayWindow:
 
     def show(self, html: str) -> None:
         self.prepare()
-        self._set_content(html)
+        self._set_content(html, reset_scroll=True)
         assert self._dialog is not None
         self._dialog.show()
         self._dialog.raise_()
@@ -141,15 +141,17 @@ class AnkiTodayWindow:
         self._web.set_bridge_command(self._on_bridge_command, self)
         self._document_initialized = True
 
-    def _set_content(self, html: str) -> None:
+    def _set_content(self, html: str, *, reset_scroll: bool = False) -> None:
         self._ensure_document()
         assert self._web is not None
         safe_html = json.dumps(html, ensure_ascii=False)
         root_id = json.dumps(self._ROOT_ID)
+        scroll_command = "window.scrollTo(0, 0);" if reset_scroll else ""
         self._web.eval(
             "(() => {"
             f"const root = document.getElementById({root_id});"
             f"if (root) root.innerHTML = {safe_html};"
+            f"{scroll_command}"
             "})();"
         )
 
