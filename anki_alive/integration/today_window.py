@@ -23,6 +23,8 @@ class AnkiTodayWindow:
         self._web: Any | None = None
         self._document_initialized = False
         self._save_geom: Callable[..., Any] | None = None
+        self._show_generation = 0
+        self._want_visible = False
 
     def set_command_handler(self, handler: Callable[[str], Any]) -> None:
         self._command_handler = handler
@@ -47,12 +49,17 @@ class AnkiTodayWindow:
         self._ensure_document()
 
     def show(self, html: str) -> None:
+        """Reveal Today only after its newest HTML has reached the DOM."""
+
         self.prepare()
-        self._set_content(html, reset_scroll=True)
-        assert self._dialog is not None
-        self._dialog.show()
-        self._dialog.raise_()
-        self._dialog.activateWindow()
+        self._want_visible = True
+        self._show_generation += 1
+        generation = self._show_generation
+        self._set_content(
+            html,
+            reset_scroll=True,
+            on_done=lambda _result: self._reveal_if_current(generation),
+        )
 
     def refresh(self, html: str) -> None:
         if not self.is_prepared:
@@ -62,12 +69,16 @@ class AnkiTodayWindow:
     def close(self) -> None:
         """Hide Today while retaining its WebView for a fast reopen."""
 
+        self._want_visible = False
+        self._show_generation += 1
         if self._dialog is not None:
             self._dialog.hide()
 
     def shutdown(self) -> None:
         """Release the retained WebView when the add-on runtime is torn down."""
 
+        self._want_visible = False
+        self._show_generation += 1
         if self._dialog is not None and self._save_geom is not None:
             self._save_geom(self._dialog, "anki_alive_today_v1")
         if self._web is not None:
@@ -89,11 +100,13 @@ class AnkiTodayWindow:
         )
         from aqt.webview import AnkiWebView, AnkiWebViewKind
 
+        owner = self
+
         class PersistentTodayDialog(QDialog):
             def reject(dialog_self) -> None:
                 # Title-bar close and Escape hide instead of destroying the
                 # expensive WebEngine surface. Runtime shutdown cleans it up.
-                dialog_self.hide()
+                owner.close()
 
         dialog = PersistentTodayDialog(None)
         disable_help_button(dialog)
@@ -141,19 +154,36 @@ class AnkiTodayWindow:
         self._web.set_bridge_command(self._on_bridge_command, self)
         self._document_initialized = True
 
-    def _set_content(self, html: str, *, reset_scroll: bool = False) -> None:
+    def _set_content(
+        self,
+        html: str,
+        *,
+        reset_scroll: bool = False,
+        on_done: Callable[[Any], None] | None = None,
+    ) -> None:
         self._ensure_document()
         assert self._web is not None
         safe_html = json.dumps(html, ensure_ascii=False)
         root_id = json.dumps(self._ROOT_ID)
         scroll_command = "window.scrollTo(0, 0);" if reset_scroll else ""
-        self._web.eval(
+        script = (
             "(() => {"
             f"const root = document.getElementById({root_id});"
             f"if (root) root.innerHTML = {safe_html};"
             f"{scroll_command}"
+            "return Boolean(root);"
             "})();"
         )
+        self._web.evalWithCallback(script, on_done)
+
+    def _reveal_if_current(self, generation: int) -> None:
+        if generation != self._show_generation or not self._want_visible:
+            return
+        if self._dialog is None or self._web is None:
+            return
+        self._dialog.show()
+        self._dialog.raise_()
+        self._dialog.activateWindow()
 
     def _on_bridge_command(self, command: str) -> Any:
         if command == "close":
