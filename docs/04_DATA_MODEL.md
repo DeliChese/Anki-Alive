@@ -558,6 +558,8 @@ migration_history
 Phase 1
 expeditions
 expedition_checkpoints
+expedition_review_observations
+presentation_events
 
 Phase 2
 oracle_predictions
@@ -580,6 +582,10 @@ Phase 7
 minimal preferences/layout seed/cache metadata if required
 ```
 
+`expedition_review_observations` is a compact traceability table that maps accepted source review identities to the Expedition that consumed them. It exists to guarantee deduplication and correct reversal reconciliation; it is not a second copy of Anki review history.
+
+`presentation_events` stores durable presentation lifecycle independently from Expedition domain truth. Phase 1 uses it so a completion summary can survive restart until explicitly dismissed.
+
 Do not pre-create every future table in Phase 0.
 
 ---
@@ -593,6 +599,25 @@ Phase 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7
 ```
 
 with representative historical data.
+
+---
+
+## 29. Phase 1 Implemented Schema Note
+
+Phase 1 closes on sidecar schema version `3`.
+
+The schema contains:
+
+```text
+schema_meta
+migration_history
+expeditions
+expedition_checkpoints
+expedition_review_observations
+presentation_events
+```
+
+Phase 1 does not modify Anki collection tables and does not persist card fronts/backs.
 
 ---
 
