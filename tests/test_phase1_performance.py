@@ -34,3 +34,4 @@ def test_phase1_exposes_copyable_performance_snapshot_from_tools() -> None:
     assert 'QAction("Anki Alive Performance Snapshot", mw)' in bootstrap_source
     assert '"reviewer_did_answer_card", "state_did_undo"' in bootstrap_source
     assert 'title="Anki Alive Performance Snapshot"' in bootstrap_source
+    assert "copyBtn=True" in bootstrap_source
