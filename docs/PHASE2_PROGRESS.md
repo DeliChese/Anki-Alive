@@ -1,6 +1,6 @@
 # Phase 2 — Oracle Progress
 
-Status: LIVE REVIEWER INTEGRATION STARTED
+Status: LIVE REVIEWER INTEGRATION — VISIBILITY HARDENED
 Date: 2026-08-19
 
 ## Slice 1 — commitment lifecycle foundation
@@ -11,7 +11,7 @@ Implemented on `main`:
 - `ReviewContextService` aggregation seam,
 - sidecar schema migration from v3 to v4,
 - durable `oracle_predictions` table,
-- Oracle domain model and deterministic first policy,
+- Oracle domain model and deterministic policy,
 - persisted pre-answer commitment identity,
 - duplicate commitment suppression for the same Expedition/card,
 - accepted-review resolution with explicit recall mapping (`Again` = failed recall; non-`Again` = recalled),
@@ -20,69 +20,82 @@ Implemented on `main`:
 - in-memory `EventOrchestrator` integration for the domain slice,
 - Undo reconciliation that reopens the original commitment instead of rerolling it,
 - invalidation of stale pending Oracle reveal after Undo,
-- re-answer resolution using the same Oracle commitment,
-- Phase 2 regression tests covering schema, durability, commitment ordering, resolution, reveal, Undo, re-answer, and safe policy fallback.
+- re-answer resolution using the same Oracle commitment.
 
-## Slice 2 — live Anki/FSRS reviewer integration
+## Slice 2 — live Anki reviewer integration
 
 Implemented on `main`:
 
 - `AnkiMemoryEngine` reads current host card memory facts at the integration boundary,
-- stability/difficulty come from Anki `Card.memory_state`,
-- retrievability is derived from Anki's persisted stability, `last_review_time`, and `decay` using the current FSRS forgetting curve,
+- stability/difficulty come from Anki `Card.memory_state` when available,
+- retrievability is derived from Anki's persisted stability, `last_review_time`, and `decay` using the FSRS forgetting curve,
 - interval, lapses, review count, and a bounded recent rating history are normalized into `MemorySnapshot`,
-- missing FSRS state degrades to `retrievability=None` instead of inventing a probability,
-- `gui_hooks.reviewer_did_show_question(card)` is the commitment trigger, guaranteeing the hook runs before an accepted answer outcome,
+- `gui_hooks.reviewer_did_show_question(card)` is the commitment trigger, guaranteeing commitment before an accepted answer outcome,
 - `ReviewContextService` aggregates active Expedition + MemorySnapshot on the question boundary,
-- Oracle cadence is sparse and deterministic from durable Expedition progress: first eligible boundary, then every 5 accepted reviews,
-- no pre-answer Oracle prediction text or probability is shown,
 - accepted `ReviewObservation` resolves the existing commitment and creates durable reveal state,
 - post-answer reveal is a small, non-interactive reviewer status surface,
-- Focus Mode suppresses presentation while preserving resolved Oracle domain truth,
+- Focus Mode suppresses Oracle presentation while preserving domain truth,
 - Reduced Motion removes reveal transition dependence,
-- if Expedition completion moves the host out of review before the scheduled Oracle reveal, session closure wins and the stale reveal is suppressed,
-- presentation state now supports explicit `SHOWN` and `SUPPRESSED` transitions,
-- additional regression tests cover the FSRS forgetting curve and host-memory normalization adapter.
+- Expedition completion wins over competing Oracle presentation.
 
-## Current policy v1
+## Visibility/compatibility hardening
 
-The first policy deliberately avoids fake scientific complexity:
+Real-host feedback exposed an important problem: the initial integration could look identical to Phase 1 because Oracle showed nothing before answer, required FSRS retrievability, and only attempted exact progress boundaries.
+
+The current `main` fixes that gap:
+
+- policy v2 still prefers FSRS retrievability when available,
+- non-FSRS cards with enough bounded review history can receive a deterministic prediction without a fabricated probability,
+- cards with neither usable FSRS state nor usable review history remain safely skipped,
+- Oracle now uses the first eligible card in each five-review progress window instead of wasting the window when its first card is ineligible,
+- a committed card shows a neutral `Oracle · Prediction sealed. Reveal after your answer.` cue on the question side,
+- the neutral cue exposes no predicted outcome, probability, confidence, grade guidance, or answer-bearing content,
+- after grading, that same surface changes to the Oracle result and then clears automatically.
+
+## Current policy v2
 
 - minimum 3 prior reviews,
-- normalized retrievability must be available,
-- retrievability below 0.75 predicts `FAIL`, otherwise `RECALL`,
-- raw normalized probability is persisted for explainability but is not shown pre-answer,
-- initial cadence is one Oracle opportunity per 5 durable Expedition progress units,
-- `Again` maps to failed recall; `Hard`/`Good`/`Easy` map to recalled for the binary Oracle outcome.
+- when normalized retrievability exists: below `0.75` predicts `FAIL`, otherwise `RECALL`,
+- when retrievability is unavailable: recent review history may provide a deterministic fallback,
+- fallback predicts `FAIL` when the latest accepted review was `Again` or at least two of the bounded recent ratings are `Again`; otherwise it predicts `RECALL`,
+- fallback persists no probability,
+- one commitment is allowed per five-review Expedition progress window, using the first eligible card,
+- `Again` maps to failed recall; `Hard`/`Good`/`Easy` map to recalled for Oracle resolution.
 
-This policy is provisional and must be validated against actual Anki/FSRS host data before Phase 2 close.
-
-## Upstream host contract used
-
-Current Anki exposes FSRS memory state on `Card.memory_state`, plus `last_review_time` and `decay`. The reviewer question hook is `gui_hooks.reviewer_did_show_question(card)`. Anki's own browser/statistics code derives retrievability from stability, elapsed time since the last review, and decay; Anki Alive mirrors that calculation inside the integration adapter rather than adding scheduler policy.
+This policy remains provisional and must be validated against real-host behavior before Phase 2 close.
 
 ## Validation status
 
-Regression tests now include:
+Regression coverage now includes:
 
 - `tests/test_phase2_oracle.py`
 - `tests/test_phase2_memory_integration.py`
+- `tests/test_phase2_oracle_ui.py`
+- `tests/test_phase2_oracle_visibility.py`
 
-They have **not been executed by the current agent environment** because the environment cannot clone/reach GitHub over the network and the repository currently exposes no CI status for direct-to-main commits. Do not infer a passing test run from test-file existence.
+The current agent environment has **not executed the suite**. The repository also exposes no CI status for the latest direct-to-main commits. Do not infer a passing run from test-file existence.
 
-The next local/host sync should run the full suite and then exercise a real FSRS-enabled Expedition.
+## What should now be visibly different from Phase 1
 
-## Next slice
+During an active Expedition, the first eligible reviewed card in an Oracle cadence window should show a small cyan-accent reviewer status:
 
-1. run the full automated suite locally after sync,
-2. real-host smoke: confirm Oracle commits on an eligible FSRS card before answer and reveals only after grading,
-3. verify no reveal occurs outside an active Expedition,
-4. verify Focus Mode suppresses reveal without deleting Oracle history,
-5. real-host Undo → same commitment reopens → re-answer resolves once,
-6. verify Expedition completion suppresses competing Oracle reveal,
-7. measure integrated reviewer P50/P95 with Oracle enabled,
-8. decide whether Oracle reveals should be `MINOR` instead of `MAJOR` for long-term orchestration,
-9. add durable deferred-reveal recovery only if real UX evidence requires it.
+```text
+ORACLE
+Prediction sealed. Reveal after your answer.
+```
+
+After the accepted grade, the surface changes to the Oracle result for a few seconds. Cards without enough memory evidence remain visually unchanged by design.
+
+## Next validation slice
+
+1. sync latest `main` and restart Anki so updated Python/JS/CSS is loaded,
+2. use a deck with cards that have at least 3 prior reviews; FSRS is preferred but no longer required,
+3. start a fresh Expedition and confirm the neutral Oracle cue appears on the first eligible card,
+4. verify result appears only after grading,
+5. verify Focus Mode suppresses cue/reveal,
+6. verify Undo reopens the same commitment and re-answer resolves once,
+7. verify Expedition completion outranks Oracle reveal,
+8. capture integrated reviewer performance evidence.
 
 ## Scope guard
 
