@@ -1,3 +1,34 @@
+.aa-oracle-online {
+  position: fixed;
+  z-index: 21;
+  top: 50px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid rgba(155, 213, 232, 0.22);
+  border-radius: var(--aa-radius-pill);
+  color: var(--aa-text-tertiary);
+  background: var(--aa-bg-surface);
+  box-shadow: var(--aa-shadow-s1);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  opacity: 0.82;
+}
+
+.aa-oracle-online__name {
+  color: var(--aa-accent-oracle);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.aa-oracle-online__state {
+  color: var(--aa-text-muted);
+}
+
 .aa-oracle-reveal {
   position: fixed;
   right: 18px;
