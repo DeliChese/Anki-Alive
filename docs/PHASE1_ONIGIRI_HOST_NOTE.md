@@ -21,24 +21,11 @@ This finding supersedes the earlier Phase 1 implementation note that described D
 
 On 2026-08-19, after pulling/reinstalling the compatibility build, the user reported that the add-on installed and started successfully on the real desktop host with the existing setup. This closes the immediate reinstall/startup blocker introduced by the host-surface refactor.
 
-This evidence is intentionally narrow. It does not by itself mark the full Phase 1 host checklist PASS. The remaining run must still verify the dedicated Today window, native Deck Browser coexistence in use, review progress, checkpoint/completion, pause/resume, undo/restart, Focus Mode, reduced motion, keyboard/layout behavior, filtered/custom-study smoke behavior, and reviewer performance.
+The user then supplied a real-host screenshot of the dedicated Today window with an Expedition in progress at 2 / 11. The visual hierarchy, restrained amber Expedition language, self-contained dark canvas, and truthful empty-signals state were all present. Two concrete host defects were also observed:
 
-## Host-hardening after the smoke pass
+1. the Today window showed a horizontal scrollbar at normal desktop width;
+2. opening Anki Alive took several seconds before the Today surface appeared.
 
-The follow-up audit tightened two presentation boundaries before the longer manual run:
+Both defects are treated as Phase 1 blockers rather than cosmetic observations. The implementation now fixes the overflow at the Today root and changes the Today host surface to reuse one persistent WebView document, update only its inner markup, and prewarm the hidden WebEngine surface shortly after startup. Real-host re-validation is still required before those fixes can be marked PASS.
 
-- the `Alive` top-toolbar link is suppressed while Anki is in active review, keeping recall chrome quiet;
-- the dedicated Today window minimum size was lowered to 520×420 so the existing responsive 760px breakpoint can be exercised on the real host.
-
-Regression coverage verifies that the toolbar entry is absent in review, present outside review, and that the Today window can reach the responsive layout breakpoint.
-
-Automated verification:
-
-```text
-GitHub Actions workflow: Anki Alive CI
-Probe run: #110
-Python 3.9 core-tests: PASS
-Python 3.13 core-tests: PASS
-Probe PR: #5
-Probe merged: no
-```
+This evidence is intentionally narrow. It does not by itself mark the full Phase 1 host checklist PASS. The remaining run must still verify the dedicated Today window after the latency/overflow fix, native Deck Browser coexistence in use, review progress, checkpoint/completion, pause/resume, undo/restart, Focus Mode, reduced motion, keyboard/layout behavior, filtered/custom-study smoke behavior, and reviewer performance.
