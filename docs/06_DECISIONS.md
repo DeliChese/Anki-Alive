@@ -200,6 +200,45 @@ When multiple features change from one review, determine whether writes share on
 
 ---
 
+## Phase 1 Decisions
+
+### ADR-P07 — Today Is a Dedicated Surface, Not a Deck Browser Replacement
+Status: ACCEPTED
+
+Anki and other add-ons retain ownership of Deck Browser content and native top-level actions. Anki Alive Today is presented in a dedicated `AnkiWebView` window, reachable from the Alive/Tools entry points.
+
+Rationale:
+
+- preserves native Decks / Add / Browse / Stats / Sync behavior,
+- avoids reimplementing host navigation,
+- reduces collisions with appearance/dashboard add-ons such as Onigiri,
+- lets Anki Alive fail or close without blocking normal review.
+
+Reviewer augmentation remains intentionally narrow: a restrained Expedition strip may be injected only in review context.
+
+### ADR-P08 — Completion Presentation State Is Durable but Separate from Expedition Truth
+Status: ACCEPTED
+
+Expedition completion is canonical domain state. Whether the completion summary is still pending or has been dismissed is presentation state stored separately in `presentation_events`.
+
+This separation allows:
+
+- completion summary recovery after restart,
+- `Done` to dismiss presentation without rewriting Expedition history,
+- future presentation orchestration to evolve without coupling UI lifecycle to feature lifecycle.
+
+### ADR-P09 — Phase 1 Keeps the Reviewer Path Synchronous Only While Measured Headroom Exists
+Status: ACCEPTED FOR PHASE 1
+
+Phase 1 sidecar progress/reconciliation work remains synchronous because real-host evidence shows the integrated path comfortably inside the cumulative budget:
+
+- accepted review P95: `1.357 ms`, max `1.739 ms`,
+- Undo P95: `1.454 ms`, max `1.454 ms`.
+
+This is not permission for later features to add independent synchronous I/O indefinitely. ADR-025 remains the forward constraint: Phase 2/3 must aggregate/collapse reviewer feature context as evidence requires.
+
+---
+
 # Decision Log North Star
 
 > **Record the decisions future engineers would otherwise be tempted to rediscover or contradict.**
