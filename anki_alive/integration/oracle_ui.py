@@ -5,16 +5,16 @@ from collections.abc import Callable
 from typing import Any
 
 from anki_alive.integration.profile import load_or_create_profile_key
-from anki_alive.oracle.events import OracleResolved
+from anki_alive.oracle.events import OracleCommitted, OracleResolved
 from anki_alive.presentation import PresentationRepository
 from anki_alive.settings import SettingsService
 
 
 class OracleUiRuntime:
-    """Post-answer Oracle presentation adapter.
+    """Oracle reviewer presentation adapter.
 
-    Oracle domain truth is already resolved before this class runs. This layer
-    only decides whether a durable reveal is shown or suppressed by Focus Mode.
+    A committed prediction may show a neutral pre-answer cue, but prediction
+    content remains private until the accepted review resolves it.
     """
 
     def __init__(
@@ -45,6 +45,7 @@ class OracleUiRuntime:
         if self._registered:
             return
         self._gui_hooks.webview_will_set_content.append(self._on_webview_will_set_content)
+        self._event_bus.subscribe(OracleCommitted, self._on_oracle_committed)
         self._event_bus.subscribe(OracleResolved, self._on_oracle_resolved)
         self._registered = True
 
@@ -63,6 +64,30 @@ class OracleUiRuntime:
         script = f"{self._asset_base}/oracle.js"
         if script not in web_content.js:
             web_content.js.append(script)
+
+    def _on_oracle_committed(self, event: OracleCommitted) -> None:
+        del event
+        self._schedule(self._show_commitment)
+
+    def _show_commitment(self) -> None:
+        try:
+            if self._settings.snapshot.focus_mode_enabled:
+                return
+            if getattr(self._mw, "state", None) != "review":
+                return
+            payload = {
+                "reduced_motion": self._settings.snapshot.reduced_motion,
+            }
+            safe_payload = json.dumps(payload, separators=(",", ":"))
+            self._mw.web.eval(
+                "window.AnkiAliveOracle && "
+                f"window.AnkiAliveOracle.showCommitment({safe_payload});"
+            )
+        except Exception as error:
+            self._diagnostics.emit(
+                "oracle_commitment_cue_error",
+                error_type=type(error).__name__,
+            )
 
     def _on_oracle_resolved(self, event: OracleResolved) -> None:
         self._schedule(lambda: self._show_resolution(event))
