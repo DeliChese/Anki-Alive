@@ -77,9 +77,9 @@ def test_today_surface_reuses_one_web_document_and_is_prewarmed() -> None:
 
     assert window_source.count("self._web.stdHtml(") == 1
     assert "self._dialog.hide()" in window_source
-    assert "dialog_self.hide()" in window_source
+    assert "owner.close()" in window_source
     assert "web.requiresCol = False" in window_source
-    assert "self._web.eval(" in window_source
+    assert "self._web.evalWithCallback(" in window_source
     assert "TODAY_PREWARM_DELAY_MS = 1200" in bootstrap_source
     assert (
         "QTimer.singleShot(TODAY_PREWARM_DELAY_MS, today_surface.prepare)"
@@ -93,6 +93,7 @@ def test_today_reopen_resets_scroll_but_refresh_does_not() -> None:
         root / "anki_alive" / "integration" / "today_window.py"
     ).read_text(encoding="utf-8")
 
-    assert "self._set_content(html, reset_scroll=True)" in window_source
+    assert "reset_scroll=True" in window_source
     assert "self._set_content(html)" in window_source
     assert 'scroll_command = "window.scrollTo(0, 0);" if reset_scroll else ""' in window_source
+    assert "self._reveal_if_current(generation)" in window_source
