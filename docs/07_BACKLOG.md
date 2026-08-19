@@ -268,9 +268,9 @@ Must not imply false scientific precision.
 ## BL-008 — One More to Closure
 
 Category: Expedition  
-Status: RESEARCH  
+Status: DEFERRED  
 Priority: P1  
-Target: Phase 1
+Target: Post-Phase-1 research / later UX evidence
 
 ### Opportunity
 
@@ -291,6 +291,10 @@ Dark-pattern behavior.
 ### Recall Integrity
 
 No penalty for stopping.
+
+### Phase 1 Close Note
+
+Phase 1 intentionally shipped without this prompt. Real completion and a clean `Done` stopping point were validated first. Revisit only with evidence that the prompt improves orientation without weakening closure or creating pressure.
 
 ---
 
@@ -341,7 +345,7 @@ Return must reflect real memory deterioration.
 Category: UX orchestration  
 Status: READY_FOR_SPEC  
 Priority: P1  
-Target: Phase 1–2
+Target: Phase 2+
 
 ### Opportunity
 
@@ -355,6 +359,10 @@ Protects reviewer attention.
 
 - EventOrchestrator
 - PresentationEvent model
+
+### Phase 1 Close Note
+
+Phase 1 shipped the EventOrchestrator/presentation-state foundation and enforced completion-over-final-checkpoint prominence. General cross-feature event compression remains deferred until Phase 2 introduces another real feature event to compress.
 
 ---
 
@@ -490,6 +498,16 @@ Status: REJECTED
 Reason:
 
 Artificial loss aversion.
+
+---
+
+# Phase 1 Close Review
+
+- `BL-008` was deliberately deferred rather than smuggled into completion UX.
+- `BL-011` keeps only the cross-feature compression work; the orchestration foundation itself now exists.
+- No Oracle/Rescue/Nemesis/Fragment/Relic placeholder behavior was added during Expedition.
+- Appearance/dashboard coexistence findings were promoted to ADR-P07 instead of becoming a feature backlog item.
+- Filtered deck/custom study validation remains a documented host-support limitation, not a new gameplay backlog item.
 
 ---
 
