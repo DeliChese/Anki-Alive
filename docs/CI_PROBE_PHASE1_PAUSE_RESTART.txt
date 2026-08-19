@@ -1,0 +1,1 @@
+Temporary CI sentinel for Phase 1 pause/restart recovery validation. Do not merge.
