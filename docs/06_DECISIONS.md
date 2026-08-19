@@ -241,31 +241,29 @@ This is not permission for later features to add independent synchronous I/O ind
 
 ## Phase 2 Decisions
 
-### ADR-P10 — Oracle Commits on Question Display and Shows No Pre-Answer Prediction
+### ADR-P10 — Oracle Commits on Question Display; Pre-Answer Cue Is Content-Neutral
 Status: ACCEPTED FOR PHASE 2
 
 Oracle uses `gui_hooks.reviewer_did_show_question(card)` as its host commitment boundary. The selected prediction is persisted from a normalized memory snapshot before an accepted review outcome can exist.
 
-Phase 2 intentionally shows no predicted outcome, probability, or grading guidance before answer. This is stricter than merely avoiding answer text: it prevents Oracle from biasing confidence or self-grading before recall is complete.
+Phase 2 may show a small `Oracle · Prediction sealed` cue once a commitment exists. The cue must not contain predicted outcome, probability, confidence language, grading guidance, or answer-bearing content. This makes the feature legible without biasing recall.
 
-### ADR-P11 — Oracle Reads Live FSRS Facts Through MemoryEngine
-Status: ACCEPTED FOR PHASE 2
+### ADR-P11 — Oracle Prefers FSRS Facts and Falls Back to Review History Without Fake Probability
+Status: ACCEPTED FOR POLICY V2
 
-The Anki integration adapter reads `Card.memory_state`, `last_review_time`, `decay`, interval, lapse/review counts, and a bounded recent revlog summary. It computes current retrievability with the FSRS forgetting curve and returns only feature-neutral `MemorySnapshot` facts.
+The Anki integration adapter reads `Card.memory_state`, `last_review_time`, `decay`, interval, lapse/review counts, and a bounded recent revlog summary. When FSRS memory state is available, current retrievability is computed with the FSRS forgetting curve and normalized into `MemorySnapshot`.
 
-If FSRS memory state is absent, Oracle receives no retrievability and skips prediction instead of fabricating confidence. Anki scheduling remains authoritative.
+When FSRS memory state is absent, policy v2 may use bounded recent accepted ratings as deterministic evidence. The fallback stores `predicted_recall_probability = NULL`; it must not invent a scientific-looking confidence score. With no FSRS retrievability and no usable review history, Oracle skips the card. Anki scheduling remains authoritative.
 
-### ADR-P12 — Initial Oracle Cadence Is Sparse and Progress-Based
+### ADR-P12 — Oracle Uses the First Eligible Card in Each Sparse Progress Window
 Status: ACCEPTED PROVISIONALLY
 
-The initial live-review cadence creates an Oracle opportunity at durable Expedition progress `0, 5, 10, ...`, subject to candidate policy eligibility. This gives a predictable first opportunity and avoids turning every card into a prediction event.
+Oracle allows at most one new commitment for each five-review Expedition progress window. The first eligible card in a window may be selected; an ineligible first card does not waste the entire window.
 
-The cadence is presentation/selection policy, not memory truth. It may be tuned after real-host UX and performance evidence without reinterpreting historical predictions.
+This preserves sparse behavior while avoiding an invisible-feature failure mode where progress moved off an exact modulo boundary before an eligible card appeared. Cadence remains selection policy and may be tuned after real-host evidence.
 
 ### ADR-P13 — Binary Oracle Recall Mapping Uses Again as Failure
-Status: ACCEPTED FOR POLICY V1
-
-For Oracle policy v1:
+Status: ACCEPTED FOR POLICY V1+
 
 - `Again` → failed recall,
 - `Hard`, `Good`, `Easy` → recalled.
@@ -275,7 +273,7 @@ The raw rating is retained for explainability. This maps to Anki/FSRS grading se
 ### ADR-P14 — Oracle Reveal Is Post-Answer and Non-Interactive
 Status: ACCEPTED FOR INITIAL UI
 
-The initial Oracle reveal is a short reviewer status surface shown only after an accepted answer. It contains no button, reward, score, or action request. Focus Mode may suppress it without changing Oracle domain truth, Reduced Motion removes transition dependence, and session closure wins if review has already ended.
+The Oracle result reveal is a short reviewer status surface shown only after an accepted answer. It contains no button, reward, score, or action request. Focus Mode may suppress both the neutral commitment cue and result reveal without changing Oracle domain truth, Reduced Motion removes transition dependence, and session closure wins if review has already ended.
 
 ---
 
