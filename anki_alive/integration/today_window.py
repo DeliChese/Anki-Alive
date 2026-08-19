@@ -58,7 +58,7 @@ class AnkiTodayWindow:
         disable_help_button(dialog)
         setWindowIcon(dialog)
         dialog.setWindowTitle("Anki Alive · Today")
-        dialog.setMinimumSize(760, 540)
+        dialog.setMinimumSize(520, 420)
         dialog.resize(1120, 760)
 
         layout = QVBoxLayout(dialog)
