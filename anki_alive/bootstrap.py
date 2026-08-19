@@ -13,8 +13,11 @@ from anki_alive.expedition import ExpeditionRepository, ExpeditionService
 from anki_alive.integration.compatibility import ensure_supported_anki_version
 from anki_alive.integration.expedition_ui import ExpeditionUiRuntime
 from anki_alive.integration.hooks import AnkiHookRuntime
+from anki_alive.integration.oracle import OracleReviewerRuntime
+from anki_alive.integration.oracle_ui import OracleUiRuntime
 from anki_alive.integration.settings_adapter import AnkiAddonSettingsAdapter
 from anki_alive.integration.today_window import AnkiTodayWindow
+from anki_alive.oracle import OraclePolicy, OracleRepository, OracleService
 from anki_alive.performance import PerformanceTimer, TimingSample
 from anki_alive.presentation import PresentationRepository
 from anki_alive.settings import SettingsService
@@ -33,9 +36,12 @@ class AddonRuntime:
     performance: PerformanceTimer
     hooks: AnkiHookRuntime
     expedition_ui: ExpeditionUiRuntime
+    oracle_reviewer: OracleReviewerRuntime
+    oracle_ui: OracleUiRuntime
     today_surface: AnkiTodayWindow
     database: Database
     expedition: ExpeditionService
+    oracle: OracleService
     presentations: PresentationRepository
 
     def close(self) -> None:
@@ -118,8 +124,9 @@ def bootstrap(module_name: str) -> AddonRuntime:
     if local_timezone is None:
         raise RuntimeError("unable to resolve local timezone")
 
+    expedition_repository = ExpeditionRepository(database)
     expedition = ExpeditionService(
-        repository=ExpeditionRepository(database),
+        repository=expedition_repository,
         event_bus=event_bus,
         clock=SystemClock(),
         ids=Uuid4Factory(),
@@ -130,6 +137,17 @@ def bootstrap(module_name: str) -> AddonRuntime:
 
     presentations = PresentationRepository(database)
 
+    oracle = OracleService(
+        repository=OracleRepository(database),
+        policy=OraclePolicy(),
+        event_bus=event_bus,
+        clock=SystemClock(),
+        ids=Uuid4Factory(),
+        presentation_repository=presentations,
+    )
+    event_bus.subscribe(ReviewObservation, oracle.on_review_observation)
+    event_bus.subscribe(ReviewReversed, oracle.on_review_reversed)
+
     hooks = AnkiHookRuntime(
         mw=mw,
         gui_hooks=gui_hooks,
@@ -137,6 +155,15 @@ def bootstrap(module_name: str) -> AddonRuntime:
         performance=performance,
     )
     hooks.register()
+
+    oracle_reviewer = OracleReviewerRuntime(
+        mw=mw,
+        gui_hooks=gui_hooks,
+        expedition_repository=expedition_repository,
+        oracle=oracle,
+        diagnostics=diagnostics,
+    )
+    oracle_reviewer.register()
 
     mw.addonManager.setWebExports(
         module_name,
@@ -163,6 +190,19 @@ def bootstrap(module_name: str) -> AddonRuntime:
         schedule=lambda callback: QTimer.singleShot(0, callback),
     )
     expedition_ui.register()
+
+    oracle_ui = OracleUiRuntime(
+        mw=mw,
+        gui_hooks=gui_hooks,
+        event_bus=event_bus,
+        presentations=presentations,
+        settings=settings,
+        diagnostics=diagnostics,
+        reviewer_type=Reviewer,
+        asset_base=asset_base,
+        schedule=lambda callback: QTimer.singleShot(0, callback),
+    )
+    oracle_ui.register()
 
     tools_action = QAction("Anki Alive Today", mw)
     qconnect(tools_action.triggered, expedition_ui.show_today)
@@ -207,9 +247,12 @@ def bootstrap(module_name: str) -> AddonRuntime:
         performance=performance,
         hooks=hooks,
         expedition_ui=expedition_ui,
+        oracle_reviewer=oracle_reviewer,
+        oracle_ui=oracle_ui,
         today_surface=today_surface,
         database=database,
         expedition=expedition,
+        oracle=oracle,
         presentations=presentations,
     )
     diagnostics.emit(
