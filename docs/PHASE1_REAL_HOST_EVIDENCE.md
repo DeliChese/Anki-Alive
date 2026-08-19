@@ -1,10 +1,10 @@
 # Phase 1 Real-Host Evidence
 
-Status: PASS FOR CORE PHASE 1 HOST GATES; DOCUMENTED EDGE LIMITATIONS REMAIN
+Status: PASS — PHASE 1 HOST VALIDATION COMPLETE
 Date: 2026-08-19
 Phase: 1 — Expedition
 
-This file records only behavior actually exercised in desktop Anki during Phase 1 validation. It does not infer support for untested host contexts.
+This file records behavior actually exercised in desktop Anki during Phase 1 validation. It does not infer support for untested host contexts.
 
 ## Confirmed real-host PASS
 
@@ -20,7 +20,9 @@ This file records only behavior actually exercised in desktop Anki during Phase 
 - Dedicated `Anki Alive · Today` window opens successfully.
 - Ordinary reopen latency improved materially after retained/prewarmed WebView changes.
 - Horizontal overflow visible in an earlier build was removed at normal desktop width.
-- Dark-mode screenshots were manually reviewed against the Phase 1 design direction.
+- Dark appearance was manually reviewed against the Phase 1 design direction.
+- Light appearance was directly exercised and remained readable/coherent.
+- A substantially narrowed Today window was directly exercised without persistent horizontal overflow or clipped core controls.
 
 ### Expedition progress / closure
 
@@ -52,7 +54,7 @@ This file records only behavior actually exercised in desktop Anki during Phase 
 
 ### Performance
 
-Latest real-host snapshot:
+Latest recorded real-host snapshot:
 
 ```text
 reviewer_did_answer_card:
@@ -80,7 +82,7 @@ Both accepted-review and Undo timing remain well inside the Phase 0 cumulative s
 - Paused and pending-completion states are covered across sidecar database reopen.
 - Focus Mode, Reduced Motion, and native button keyboard semantics have regression coverage.
 
-## Explicitly unclaimed / remaining visual spot-checks
+## Explicitly unclaimed host contexts
 
 The following are not inferred from ordinary deck testing:
 
@@ -89,9 +91,10 @@ The following are not inferred from ordinary deck testing:
 - naturally occurring queue exhaustion before target was not manufactured in the user's collection,
 - intermediate checkpoint presentation was not forced on the real collection solely for validation.
 
-These are documented limitations rather than reasons to mutate collection state unsafely. Ordinary deck review is the validated Phase 1 host path.
+These are documented limitations rather than Phase 1 blockers. Ordinary deck review is the validated Phase 1 host path.
 
-Two visual spot-checks from the original manual checklist still require direct host evidence before the manual validation document can be marked fully complete:
+## Phase 1 host gate result
 
-- light appearance,
-- substantially narrowed Today window.
+The final visual gates — light appearance and substantially narrowed Today layout — were directly exercised by the project owner and reported working on 2026-08-19.
+
+Phase 1 host validation is therefore complete.
