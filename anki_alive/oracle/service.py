@@ -46,6 +46,29 @@ class OracleService:
     def commitment_count(self, expedition_id: UUID) -> int:
         return self.repository.count_for_expedition(expedition_id)
 
+    def committed_for_expedition_card(
+        self,
+        expedition_id: UUID,
+        card_id: int,
+    ) -> OraclePrediction | None:
+        return self.repository.committed_for_expedition_card(expedition_id, card_id)
+
+    def announce_commitment(self, prediction: OraclePrediction) -> None:
+        """Publish the neutral pre-answer presence cue for a durable commitment.
+
+        This may be called again when a committed card is redisplayed after an
+        add-on reload/restart. The prediction itself is not recreated or rerolled.
+        """
+
+        self.event_bus.publish(
+            OracleCommitted(
+                oracle_prediction_id=prediction.oracle_prediction_id,
+                expedition_id=prediction.expedition_id,
+                card_id=prediction.card_id,
+                predicted_outcome=prediction.predicted_outcome,
+            )
+        )
+
     def commit(
         self,
         *,
@@ -66,14 +89,7 @@ class OracleService:
         )
         stored = self.repository.create(prediction)
         if stored.oracle_prediction_id == prediction.oracle_prediction_id:
-            self.event_bus.publish(
-                OracleCommitted(
-                    oracle_prediction_id=stored.oracle_prediction_id,
-                    expedition_id=stored.expedition_id,
-                    card_id=stored.card_id,
-                    predicted_outcome=stored.predicted_outcome,
-                )
-            )
+            self.announce_commitment(stored)
         return stored
 
     def on_review_observation(self, observation: ReviewObservation) -> None:
