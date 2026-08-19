@@ -112,6 +112,24 @@ class OracleReviewerRuntime:
                     reason="no_active_expedition",
                 )
                 return
+
+            # A commitment may already exist from an earlier invisible build,
+            # restart, or Undo. Re-announce only its neutral presence so the UI
+            # can restore "Prediction sealed" without rerolling domain truth.
+            existing = self._oracle.committed_for_expedition_card(
+                expedition.expedition_id,
+                card_id,
+            )
+            if existing is not None:
+                self._oracle.announce_commitment(existing)
+                self._diagnostics.emit(
+                    "oracle_commitment_restored",
+                    oracle_prediction_id=str(existing.oracle_prediction_id),
+                    expedition_id=str(existing.expedition_id),
+                    card_id=existing.card_id,
+                )
+                return
+
             if snapshot is None:
                 self._diagnostics.emit(
                     "oracle_candidate_skipped",
