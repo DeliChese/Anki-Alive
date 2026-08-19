@@ -190,3 +190,54 @@ def test_queue_exhaustion_closes_without_changing_the_planned_target() -> None:
         assert completed[0].completed_reviews == 0
         assert completed[0].target_reviews == 5
         database.close()
+
+
+def test_paused_expedition_survives_database_reopen_with_fixed_plan() -> None:
+    with TemporaryDirectory() as temporary_directory:
+        path = Path(temporary_directory) / "anki_alive.sqlite3"
+        database = Database(path)
+        database.open()
+        bus, service = make_service(database)
+        expedition = service.plan(profile_key="profile-a", target_reviews=16)
+        service.start(expedition.expedition_id)
+
+        for index in range(1, 4):
+            bus.publish(
+                new_observation(
+                    profile_key="profile-a",
+                    card_id=index,
+                    rating=3,
+                    source_review_id=300 + index,
+                    reviewed_at_utc=datetime(2026, 8, 18, 12, index, tzinfo=timezone.utc),
+                )
+            )
+
+        paused = service.pause(expedition.expedition_id)
+        original_targets = [
+            item.target_progress
+            for item in service.checkpoints(expedition.expedition_id)
+        ]
+        assert paused.status is ExpeditionStatus.PAUSED
+        assert paused.completed_reviews == 3
+        database.close()
+
+        reopened_database = Database(path)
+        reopened_database.open()
+        _, reopened_service = make_service(reopened_database)
+        restored = reopened_service.resumable("profile-a")
+
+        assert restored is not None
+        assert restored.expedition_id == expedition.expedition_id
+        assert restored.status is ExpeditionStatus.PAUSED
+        assert restored.completed_reviews == 3
+        assert restored.target_reviews == 16
+        assert [
+            item.target_progress
+            for item in reopened_service.checkpoints(restored.expedition_id)
+        ] == original_targets
+
+        resumed = reopened_service.resume(restored.expedition_id)
+        assert resumed.status is ExpeditionStatus.ACTIVE
+        assert resumed.completed_reviews == 3
+        assert resumed.target_reviews == 16
+        reopened_database.close()
