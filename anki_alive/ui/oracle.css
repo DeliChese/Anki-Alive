@@ -3,7 +3,7 @@
   right: 18px;
   bottom: 18px;
   z-index: 40;
-  width: min(320px, calc(100vw - 36px));
+  width: min(340px, calc(100vw - 36px));
   padding: 12px 14px;
   border: 1px solid var(--aa-line-subtle);
   border-radius: var(--aa-radius-lg);
@@ -15,7 +15,8 @@
   transform: translateY(6px);
   transition:
     opacity var(--aa-time-2) var(--aa-ease-standard),
-    transform var(--aa-time-2) var(--aa-ease-standard);
+    transform var(--aa-time-2) var(--aa-ease-standard),
+    border-color var(--aa-time-2) var(--aa-ease-standard);
 }
 
 .aa-oracle-reveal[data-visible="true"] {
@@ -23,9 +24,21 @@
   transform: translateY(0);
 }
 
+.aa-oracle-reveal[data-state="committed"] {
+  border-color: rgba(155, 213, 232, 0.28);
+  background:
+    linear-gradient(rgba(155, 213, 232, 0.035), rgba(155, 213, 232, 0.035)),
+    var(--aa-bg-elevated);
+  box-shadow: var(--aa-shadow-s1);
+}
+
+.aa-oracle-reveal[data-state="resolved"] {
+  border-color: rgba(155, 213, 232, 0.46);
+}
+
 .aa-oracle-reveal__label {
   margin: 0 0 4px;
-  color: var(--aa-text-tertiary);
+  color: var(--aa-accent-oracle);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -36,6 +49,11 @@
   margin: 0;
   font-size: 14px;
   line-height: 1.4;
+}
+
+.aa-oracle-reveal[data-state="committed"] .aa-oracle-reveal__result {
+  color: var(--aa-text-secondary);
+  font-size: 13px;
 }
 
 .aa-oracle-reveal[data-reduced-motion="true"] {
