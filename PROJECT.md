@@ -172,7 +172,7 @@ Future canonical documents are expected to cover:
 
 ## Current Status
 
-**Stage:** Phase 2 — Oracle implementation
+**Stage:** Phase 2 — Oracle live reviewer integration
 
 **Phase 1:** COMPLETE. Expedition engineering, automated coverage, performance evidence, accessibility checks, restart/Undo behavior, and real-host visual validation are closed.
 
@@ -182,10 +182,12 @@ Future canonical documents are expected to cover:
 
 **Phase 2 progress:** `docs/PHASE2_PROGRESS.md`
 
-**Implementation status:** Slice 1 is implemented on `main`: feature-neutral Memory Engine contract, reviewer context aggregation seam, sidecar schema v4, durable Oracle commitments, deterministic policy v1, accepted-review resolution, durable post-answer reveal scheduling, Undo/re-answer reconciliation, and regression tests.
+**Phase 2 host smoke:** `docs/PHASE2_HOST_SMOKE.md`
 
-**Validation note:** Phase 2 regression tests have been added but were not executed by the current agent environment; the next synced local/host checkout must run the suite before deeper reviewer integration.
+**Implementation status:** Slices 1–2 are implemented on `main`: schema v4 and durable Oracle lifecycle, feature-neutral Memory Engine/ReviewContext contracts, live Anki FSRS memory adapter, pre-answer commitment from `reviewer_did_show_question`, sparse Expedition-progress cadence, accepted-review resolution, post-answer reviewer reveal, Focus Mode suppression, Reduced Motion semantics, Undo/re-answer reconciliation, and regression coverage.
 
-**Next implementation focus:** Wire a validated Anki/FSRS-backed MemoryEngine and reviewer card-show commitment path, add sparse Oracle cadence, connect post-answer reveal to the live reviewer UX, then measure integrated reviewer performance.
+**Validation note:** Phase 2 regression tests have been added but were not executed by the current agent environment; the synced local/host checkout must run the suite and real-host smoke before these slices are considered validated.
+
+**Next implementation focus:** Validate the live Oracle path in desktop Anki, measure question/answer reviewer latency with Oracle enabled, harden Undo/restart and completion precedence from real-host evidence, then refine reveal prominence/cadence only if evidence supports it.
 
 **Recall-integrity gate:** Oracle must commit before the outcome is known, reveal only after the learner answers, and never bias grading or leak answer information before recall.
