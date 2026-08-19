@@ -216,7 +216,7 @@ class ExpeditionUiRuntime:
                 self._refresh_today()
             elif message == "anki-alive:expedition:done":
                 self._dismiss_completion()
-                self._refresh_today()
+                self._today_surface.close()
             elif message == "anki-alive:expedition:continue":
                 self._dismiss_completion()
                 _, due_reviews = self._study_context()
