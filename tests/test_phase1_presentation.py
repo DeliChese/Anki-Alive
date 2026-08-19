@@ -229,7 +229,8 @@ def test_today_reviewer_completion_focus_and_dismiss_flow(tmp_path: Path) -> Non
     hooks.webview_will_set_content[0](today, deck_browser)
     assert 'id="anki-alive-today"' in today.body
     assert "Memory core" in today.body
-    assert "2 reviews due" in today.body
+    assert '<span class="aa-type-metric-large">2</span>' in today.body
+    assert "reviews due" in today.body
     assert "Begin Expedition" in today.body
     assert "No additional signals right now." in today.body
     assert "Oracle" not in today.body
