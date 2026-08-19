@@ -27,7 +27,14 @@ from anki_alive.ui.expedition import render_review_strip, render_today
 
 
 class ExpeditionUiRuntime:
-    """Thin Anki UI adapter for Phase 1 Expedition presentation."""
+    """Thin Anki UI adapter for Phase 1 Expedition presentation.
+
+    Today deliberately lives outside Anki's Deck Browser DOM. The Deck Browser
+    is a shared host surface frequently customized by other add-ons, so Anki
+    Alive only adds a toolbar entry point and keeps its full Today experience in
+    a dedicated window. Reviewer presentation remains a restrained WebView
+    augmentation.
+    """
 
     def __init__(
         self,
@@ -39,8 +46,8 @@ class ExpeditionUiRuntime:
         presentations: PresentationRepository,
         settings: SettingsService,
         diagnostics: Any,
-        deck_browser_type: type[Any],
         reviewer_type: type[Any],
+        today_surface: Any,
         asset_base: str,
         schedule: Callable[[Callable[[], None]], None],
     ) -> None:
@@ -51,8 +58,8 @@ class ExpeditionUiRuntime:
         self._presentations = presentations
         self._settings = settings
         self._diagnostics = diagnostics
-        self._deck_browser_type = deck_browser_type
         self._reviewer_type = reviewer_type
+        self._today_surface = today_surface
         self._asset_base = asset_base.rstrip("/")
         self._schedule = schedule
         self._orchestrator = EventOrchestrator()
@@ -65,8 +72,8 @@ class ExpeditionUiRuntime:
         self._gui_hooks.webview_will_set_content.append(
             self._on_webview_will_set_content
         )
-        self._gui_hooks.webview_did_receive_js_message.append(
-            self._on_js_message
+        self._gui_hooks.top_toolbar_did_init_links.append(
+            self._on_top_toolbar_did_init_links
         )
         self._gui_hooks.reviewer_will_end.append(self._on_reviewer_will_end)
 
@@ -86,6 +93,7 @@ class ExpeditionUiRuntime:
             ExpeditionReopened,
             self._on_expedition_reopened,
         )
+        self._today_surface.set_command_handler(self.handle_today_command)
         self._registered = True
 
     def _profile_key(self) -> str:
@@ -94,7 +102,7 @@ class ExpeditionUiRuntime:
     def _now(self):
         return self._expedition.clock.now_utc()
 
-    def _ensure_assets(self, web_content: Any) -> None:
+    def _ensure_reviewer_assets(self, web_content: Any) -> None:
         for stylesheet in (
             f"{self._asset_base}/foundation.css",
             f"{self._asset_base}/expedition.css",
@@ -111,105 +119,121 @@ class ExpeditionUiRuntime:
         context: object | None,
     ) -> None:
         try:
-            if isinstance(context, self._deck_browser_type):
-                self._ensure_assets(web_content)
-                context_name, due_reviews = self._deck_context(context)
-                profile_key = self._profile_key()
-                resumable = self._expedition.resumable(profile_key)
-                completion = self._completion_for_profile(profile_key)
-                completion_checkpoints = (
-                    self._expedition.checkpoints(completion.expedition_id)
-                    if completion is not None
-                    else ()
-                )
-                proposed_target = None
-                if resumable is None and completion is None and due_reviews > 0:
-                    proposed_target = self._expedition.target_for_available_reviews(
-                        due_reviews
-                    )
-                checkpoints = (
-                    self._expedition.checkpoints(resumable.expedition_id)
-                    if resumable is not None
-                    else ()
-                )
-                snapshot = self._settings.snapshot
-                today_html = render_today(
-                    study_date=self._expedition.study_date(),
-                    context_name=context_name,
-                    due_reviews=due_reviews,
-                    proposed_target=proposed_target,
-                    expedition=resumable,
-                    checkpoints=checkpoints,
-                    completed_summary=completion,
-                    completed_checkpoints=completion_checkpoints,
-                    focus_mode=snapshot.focus_mode_enabled,
-                    reduced_motion=snapshot.reduced_motion,
-                )
-                web_content.body = today_html + web_content.body
+            if not isinstance(context, self._reviewer_type):
                 return
-
-            if isinstance(context, self._reviewer_type):
-                profile_key = self._profile_key()
-                expedition = self._expedition.resumable(profile_key)
-                if expedition is None or expedition.status is not ExpeditionStatus.ACTIVE:
-                    return
-                self._ensure_assets(web_content)
-                snapshot = self._settings.snapshot
-                web_content.body += render_review_strip(
-                    expedition,
-                    self._expedition.checkpoints(expedition.expedition_id),
-                    focus_mode=snapshot.focus_mode_enabled,
-                    reduced_motion=snapshot.reduced_motion,
-                )
+            profile_key = self._profile_key()
+            expedition = self._expedition.resumable(profile_key)
+            if expedition is None or expedition.status is not ExpeditionStatus.ACTIVE:
+                return
+            self._ensure_reviewer_assets(web_content)
+            snapshot = self._settings.snapshot
+            web_content.body += render_review_strip(
+                expedition,
+                self._expedition.checkpoints(expedition.expedition_id),
+                focus_mode=snapshot.focus_mode_enabled,
+                reduced_motion=snapshot.reduced_motion,
+            )
         except Exception as error:
             self._diagnostics.emit(
                 "expedition_ui_render_error",
                 error_type=type(error).__name__,
             )
 
-    def _on_js_message(
-        self,
-        handled: tuple[bool, Any],
-        message: str,
-        context: Any,
-    ) -> tuple[bool, Any]:
-        if handled[0] or not message.startswith("anki-alive:"):
-            return handled
+    def _on_top_toolbar_did_init_links(self, links: list[str], toolbar: Any) -> None:
+        links.append(
+            toolbar.create_link(
+                "anki-alive-today",
+                "Alive",
+                self.show_today,
+                tip="Open Anki Alive Today",
+                id="anki-alive-today-link",
+            )
+        )
 
+    def show_today(self) -> None:
+        try:
+            self._today_surface.show(self._render_today_html())
+        except Exception as error:
+            self._diagnostics.emit(
+                "expedition_today_open_error",
+                error_type=type(error).__name__,
+            )
+
+    def _refresh_today(self) -> None:
+        try:
+            self._today_surface.refresh(self._render_today_html())
+        except Exception as error:
+            self._diagnostics.emit(
+                "expedition_today_refresh_error",
+                error_type=type(error).__name__,
+            )
+
+    def _render_today_html(self) -> str:
+        context_name, due_reviews = self._study_context()
+        profile_key = self._profile_key()
+        resumable = self._expedition.resumable(profile_key)
+        completion = self._completion_for_profile(profile_key)
+        completion_checkpoints = (
+            self._expedition.checkpoints(completion.expedition_id)
+            if completion is not None
+            else ()
+        )
+        proposed_target = None
+        if resumable is None and completion is None and due_reviews > 0:
+            proposed_target = self._expedition.target_for_available_reviews(due_reviews)
+        checkpoints = (
+            self._expedition.checkpoints(resumable.expedition_id)
+            if resumable is not None
+            else ()
+        )
+        snapshot = self._settings.snapshot
+        return render_today(
+            study_date=self._expedition.study_date(),
+            context_name=context_name,
+            due_reviews=due_reviews,
+            proposed_target=proposed_target,
+            expedition=resumable,
+            checkpoints=checkpoints,
+            completed_summary=completion,
+            completed_checkpoints=completion_checkpoints,
+            focus_mode=snapshot.focus_mode_enabled,
+            reduced_motion=snapshot.reduced_motion,
+        )
+
+    def handle_today_command(self, message: str) -> None:
+        if not message.startswith("anki-alive:"):
+            return
         try:
             if message == "anki-alive:expedition:begin":
-                self._begin_expedition(context)
+                self._begin_expedition()
             elif message == "anki-alive:expedition:resume":
                 self._resume_expedition()
                 self._start_review()
             elif message == "anki-alive:expedition:end":
                 self._end_expedition()
-                self._refresh_context(context)
+                self._refresh_today()
             elif message == "anki-alive:expedition:done":
                 self._dismiss_completion()
-                self._refresh_context(context)
+                self._refresh_today()
             elif message == "anki-alive:expedition:continue":
                 self._dismiss_completion()
-                _, due_reviews = self._deck_context(context)
+                _, due_reviews = self._study_context()
                 if due_reviews > 0:
                     self._start_review()
                 else:
-                    self._refresh_context(context)
+                    self._refresh_today()
             elif message == "anki-alive:focus:toggle":
                 current = self._settings.snapshot.focus_mode_enabled
                 self._settings.set_focus_mode(not current)
-                self._refresh_context(context)
-            else:
-                return handled
+                self._refresh_today()
         except Exception as error:
             self._diagnostics.emit(
                 "expedition_ui_command_error",
                 command=message,
                 error_type=type(error).__name__,
             )
-        return (True, None)
 
-    def _begin_expedition(self, context: Any) -> None:
+    def _begin_expedition(self) -> None:
         profile_key = self._profile_key()
         existing = self._expedition.resumable(profile_key)
         if existing is not None:
@@ -217,9 +241,9 @@ class ExpeditionUiRuntime:
             self._start_review()
             return
 
-        _, due_reviews = self._deck_context(context)
+        _, due_reviews = self._study_context()
         if due_reviews <= 0:
-            self._refresh_context(context)
+            self._refresh_today()
             return
         expedition = self._expedition.plan_for_available_reviews(
             profile_key=profile_key,
@@ -292,47 +316,15 @@ class ExpeditionUiRuntime:
         return expedition
 
     def _start_review(self) -> None:
+        self._today_surface.close()
         self._mw.col.startTimebox()
         self._mw.moveToState("review")
 
-    def _refresh_context(self, context: Any) -> None:
-        refresh = getattr(context, "refresh", None)
-        if callable(refresh):
-            refresh()
-
-    def _deck_context(self, context: Any) -> tuple[str, int]:
-        render_data = getattr(context, "_render_data", None)
-        if render_data is not None:
-            root = getattr(render_data, "tree", None)
-            current_id = getattr(render_data, "current_deck_id", None)
-            node = self._find_deck_node(root, current_id)
-            if node is not None:
-                name = str(getattr(node, "name", "Current deck"))
-                due = sum(
-                    max(0, int(getattr(node, attribute, 0) or 0))
-                    for attribute in (
-                        "new_count",
-                        "learn_count",
-                        "review_count",
-                    )
-                )
-                return name, due
-
+    def _study_context(self) -> tuple[str, int]:
         counts = tuple(int(value) for value in self._mw.col.sched.counts())
         due = sum(max(0, value) for value in counts[:3])
         deck = self._mw.col.decks.current()
         return str(deck.get("name", "Current deck")), due
-
-    def _find_deck_node(self, node: Any, wanted_id: Any) -> Any | None:
-        if node is None:
-            return None
-        if str(getattr(node, "deck_id", "")) == str(wanted_id):
-            return node
-        for child in getattr(node, "children", ()) or ():
-            found = self._find_deck_node(child, wanted_id)
-            if found is not None:
-                return found
-        return None
 
     def _on_reviewer_will_end(self) -> None:
         try:
@@ -420,6 +412,7 @@ class ExpeditionUiRuntime:
             if event.kind == "expedition.completion":
                 if getattr(self._mw, "state", None) in {"review", "overview"}:
                     self._mw.moveToState("deckBrowser")
+                self._schedule(self.show_today)
                 continue
 
             if event.kind == "expedition.checkpoint":
