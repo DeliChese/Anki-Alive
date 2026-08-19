@@ -1,10 +1,10 @@
 # Phase 1 Real-Host Evidence
 
-Status: PARTIAL PASS — FINAL HOST GATES REMAIN
+Status: PASS FOR CORE PHASE 1 HOST GATES; DOCUMENTED EDGE LIMITATIONS REMAIN
 Date: 2026-08-19
 Phase: 1 — Expedition
 
-This file records only behavior actually exercised in desktop Anki during Phase 1 validation. It must not be used to infer untested gates.
+This file records only behavior actually exercised in desktop Anki during Phase 1 validation. It does not infer support for untested host contexts.
 
 ## Confirmed real-host PASS
 
@@ -34,12 +34,21 @@ This file records only behavior actually exercised in desktop Anki during Phase 
 - A partially completed Expedition remained resumable with preserved progress/target.
 - Closing and reopening Anki preserved the resumable Expedition.
 - Resume continued normal review behavior.
+- A pending completion summary survived a full Anki restart before `Done`.
+- After `Done`, a later restart did not resurrect the dismissed completion summary.
 
 ### Undo reconciliation
 
 - Review Undo reconciled Expedition progress downward correctly.
 - Re-answering the undone card contributed once rather than double-counting.
 - Real-host Undo correctness gate: PASS.
+
+### Focus Mode / Reduced Motion / keyboard
+
+- Focus Mode presentation was exercised successfully in Today and review.
+- Numeric Expedition progress remained available while presentation intensity was reduced.
+- Reduced Motion was exercised successfully through the Anki Alive setting path; state remained understandable without relying on travel animation.
+- Keyboard navigation/activation for the tested Today flow worked, including visible focus and Escape-to-hide behavior.
 
 ### Performance
 
@@ -63,18 +72,26 @@ state_did_undo:
 
 Both accepted-review and Undo timing remain well inside the Phase 0 cumulative synchronous budget. See `docs/PHASE1_PERFORMANCE_EVIDENCE.md` for the detailed comparison.
 
-## Still pending real-host confirmation
+## Automated evidence covering edge behavior
 
-The following must remain PENDING until explicitly exercised or documented as an accepted limitation:
+- Intermediate checkpoint logic is covered with a target-16 Expedition where checkpoint 8 emits exactly once.
+- Queue exhaustion before target is covered by domain/service tests and preserves the original fixed target.
+- Duplicate review delivery is covered and does not double-count progress.
+- Paused and pending-completion states are covered across sidecar database reopen.
+- Focus Mode, Reduced Motion, and native button keyboard semantics have regression coverage.
 
-- pending-completion summary survives full Anki restart before `Done`, then stays dismissed after `Done` + restart,
-- Focus Mode presentation in Today and reviewer,
-- Reduced Motion setting / static meaning preservation,
-- keyboard-only path and visible focus across core Today actions,
-- narrow-window responsive layout beyond the already observed normal-width overflow fix,
-- light appearance visual pass,
-- intermediate checkpoint presentation when a route has a non-final checkpoint,
-- queue exhaustion before fixed target when naturally reproducible,
-- filtered deck / custom study smoke where practical.
+## Explicitly unclaimed / remaining visual spot-checks
 
-Do not mark overall Phase 1 manual validation complete until the required remaining host gates are resolved in `docs/PHASE1_MANUAL_VALIDATION.md`.
+The following are not inferred from ordinary deck testing:
+
+- filtered-deck behavior has not been separately claimed from this host run,
+- custom-study behavior has not been separately claimed from this host run,
+- naturally occurring queue exhaustion before target was not manufactured in the user's collection,
+- intermediate checkpoint presentation was not forced on the real collection solely for validation.
+
+These are documented limitations rather than reasons to mutate collection state unsafely. Ordinary deck review is the validated Phase 1 host path.
+
+Two visual spot-checks from the original manual checklist still require direct host evidence before the manual validation document can be marked fully complete:
+
+- light appearance,
+- substantially narrowed Today window.
