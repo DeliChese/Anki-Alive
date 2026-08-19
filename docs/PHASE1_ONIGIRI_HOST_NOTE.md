@@ -1,6 +1,6 @@
 # Phase 1 Deck Browser Compatibility Finding
 
-Status: FIX IMPLEMENTED, HOST RE-VALIDATION REQUIRED
+Status: HOST REINSTALL / STARTUP SMOKE PASS; FULL PHASE 1 HOST VALIDATION PENDING
 Date: 2026-08-19
 
 Real-host inspection with the Onigiri add-on exposed a structural compatibility problem: embedding the full Anki Alive Today surface directly into Anki's Deck Browser competes with appearance/dashboard add-ons that legitimately customize the same host DOM.
@@ -17,4 +17,8 @@ Phase 1 now follows a compatibility-first boundary:
 
 This finding supersedes the earlier Phase 1 implementation note that described Deck Browser augmentation as the Today host surface.
 
-Host re-validation must confirm coexistence with Onigiri and with normal Anki Deck Browser behavior before Phase 1 closes.
+## Real-host evidence after the compatibility change
+
+On 2026-08-19, after pulling/reinstalling the compatibility build, the user reported that the add-on installed and started successfully on the real desktop host with the existing setup. This closes the immediate reinstall/startup blocker introduced by the host-surface refactor.
+
+This evidence is intentionally narrow. It does not by itself mark the full Phase 1 host checklist PASS. The remaining run must still verify the dedicated Today window, native Deck Browser coexistence in use, review progress, checkpoint/completion, pause/resume, undo/restart, Focus Mode, reduced motion, keyboard/layout behavior, filtered/custom-study smoke behavior, and reviewer performance.
