@@ -159,7 +159,7 @@ lifecycle:
 - reviewer cleanup after Anki has no next card -> COMPLETED due to queue exhaustion.
 
 The planned target does not change. If an Expedition planned for 50 reviews
-closes after 43 because Anki has no eligible review left, durable state remains:
+closes after 43 because Anki has no eligible reviews left, durable state remains:
 
 ```text
 target_reviews = 50
@@ -225,7 +225,7 @@ Local sidecar SQLite files under `user_files/` are ignored by Git while
 
 ## Automated-validation status
 
-Automated test coverage has been added for:
+Automated test coverage includes:
 
 - all four grades counting equally,
 - duplicate review suppression,
@@ -243,10 +243,33 @@ Automated test coverage has been added for:
 - natural queue exhaustion -> truthful early closure,
 - quiet reviewer CSS/JS constraints.
 
-GitHub Actions is configured for pushes to `main` on Python 3.9 and 3.13.
-The available connector does not expose push-triggered workflow runs for these
-commits, and the execution sandbox cannot resolve github.com for a local clone.
-Therefore this note does not claim CI PASS.
+GitHub Actions is configured for Python 3.9 and 3.13. Push-triggered runs are
+not exposed by the current connector, so CI was verified with a disposable
+draft pull-request probe based on the exact `main` snapshot
+`f58a060418790919a1f01895529ce0fa4afb4857`.
+
+Verification evidence:
+
+```text
+GitHub Actions workflow: Anki Alive CI
+Probe run: #95
+Python 3.9 core-tests: PASS
+Python 3.13 core-tests: PASS
+Probe merged: no
+Probe branch after validation: reset to tested main snapshot
+```
+
+The probe existed only to expose the same test workflow to the connector. The
+runtime and tests under validation were the `main` snapshot above; the probe's
+only temporary difference was a disposable text sentinel.
+
+The first probe run also caught a stale presentation assertion that expected the
+Today metric and label to be one contiguous string. Production intentionally
+renders the numeric metric and `reviews due` label as separate semantic spans.
+The assertion was corrected on `main`, then run #95 passed both Python versions.
+
+Automated CI is therefore PASS for the tested Phase 1 code snapshot. This does
+not replace the required desktop-Anki host validation.
 
 ## Pre-host UI review
 
