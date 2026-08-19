@@ -57,6 +57,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
     from aqt import gui_hooks, mw
     from aqt.qt import QAction, QTimer, qconnect
     from aqt.reviewer import Reviewer
+    from aqt.utils import showText
 
     ensure_supported_anki_version(int_version())
 
@@ -166,6 +167,17 @@ def bootstrap(module_name: str) -> AddonRuntime:
     tools_action = QAction("Anki Alive Today", mw)
     qconnect(tools_action.triggered, expedition_ui.show_today)
     mw.form.menuTools.addAction(tools_action)
+
+    performance_action = QAction("Anki Alive Performance Snapshot", mw)
+
+    def show_performance_snapshot() -> None:
+        report = performance.report(
+            ("reviewer_did_answer_card", "state_did_undo")
+        )
+        showText(report, parent=mw, title="Anki Alive Performance Snapshot")
+
+    qconnect(performance_action.triggered, show_performance_snapshot)
+    mw.form.menuTools.addAction(performance_action)
 
     # Warm the hidden WebEngine surface after normal startup has had time to
     # settle. This moves Chromium/page setup out of the user's click path
