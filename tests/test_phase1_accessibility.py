@@ -56,3 +56,14 @@ def test_phase1_css_keeps_focus_visible_and_motion_optional() -> None:
     assert '.aa-review-strip[data-focus-mode="true"]' in expedition
     assert '.anki-alive[data-reduced-motion="true"].aa-today' in expedition
     assert "animation: none" in expedition
+
+
+def test_reduced_motion_has_a_keyboard_reachable_tools_toggle() -> None:
+    root = Path(__file__).parents[1]
+    bootstrap = (root / "anki_alive" / "bootstrap.py").read_text(encoding="utf-8")
+
+    assert 'QAction("Anki Alive Reduced Motion", mw)' in bootstrap
+    assert "reduced_motion_action.setCheckable(True)" in bootstrap
+    assert "reduced_motion_action.setChecked(settings.snapshot.reduced_motion)" in bootstrap
+    assert "settings.set_reduced_motion(bool(enabled))" in bootstrap
+    assert "qconnect(reduced_motion_action.toggled, set_reduced_motion)" in bootstrap
