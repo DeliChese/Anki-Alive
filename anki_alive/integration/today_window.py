@@ -107,6 +107,10 @@ class AnkiTodayWindow:
         layout.setSpacing(0)
 
         web = AnkiWebView(parent=dialog, kind=AnkiWebViewKind.DEFAULT)
+        # The hidden shell may be prewarmed before a collection is fully ready.
+        # Its document/bridge are host UI infrastructure; study data is only
+        # resolved when the user actually opens Today.
+        web.requiresCol = False
         web.set_bridge_command(self._on_bridge_command, self)
         layout.addWidget(web)
 
