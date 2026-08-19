@@ -3,39 +3,53 @@
 Status: PENDING
 Date: 2026-08-19
 
-Use this after syncing the latest `main` into the desktop Anki add-on checkout.
+Use this after syncing the latest `main` into the desktop Anki add-on checkout and fully restarting Anki so Python, JS, and CSS reload.
 
 ## Preconditions
 
-- FSRS is enabled on the host profile.
-- Use an ordinary deck with reviewed cards; Oracle policy v1 requires at least 3 prior reviews and usable FSRS memory state.
+- Use an ordinary deck with cards that have at least 3 prior reviews.
+- FSRS is preferred but no longer required: policy v2 can fall back to bounded recent review history without inventing a probability.
 - Start a normal Anki Alive Expedition.
 - Do not alter collection state just to force a particular Oracle prediction.
 
 ## Expected cadence
 
-Oracle gets an opportunity when durable Expedition progress is `0, 5, 10, ...`.
+Oracle allows at most one new commitment per five accepted-review Expedition progress units.
 
-Eligibility is still controlled by memory policy. If the card at a cadence boundary lacks enough memory evidence, no prediction is committed and the next eligible card at the same progress boundary may be considered.
+The first eligible card in each window may receive Oracle. If an earlier card in that window lacks enough memory evidence, the window stays available for a later eligible card instead of being silently wasted.
 
-## A. No pre-answer leakage
+## A. Neutral pre-answer commitment cue
 
 1. Start an Expedition and reach an Oracle-eligible reviewed card.
-2. Observe the question side before showing the answer.
-3. Confirm there is no predicted outcome, probability, grading recommendation, or answer-bearing Oracle content.
+2. On the question side, look for the small cyan-accent status surface:
+
+```text
+ORACLE
+Prediction sealed. Reveal after your answer.
+```
+
+3. Confirm the cue contains no predicted outcome, probability, confidence, grading recommendation, or answer-bearing content.
 4. Confirm normal Anki answer controls and keyboard shortcuts behave unchanged.
 
-PASS requires Oracle to remain private before the learner answers.
+PASS requires Oracle to be visibly present without leaking the private prediction.
 
 ## B. Post-answer reveal
 
-1. Answer an eligible card normally.
+1. Answer the committed card normally.
 2. Grade with the rating that honestly matches recall.
-3. Confirm any Oracle reveal appears only after the accepted grade.
-4. Confirm the reveal is small, non-interactive, and disappears without blocking the next card.
-5. Confirm the reveal does not award points, currency, bonus Expedition progress, or praise a higher grading button.
+3. Confirm the Oracle surface changes to a result only after the accepted grade.
+4. Confirm the result is small, non-interactive, and disappears without blocking the next card.
+5. Confirm it does not award points, currency, bonus Expedition progress, or praise a higher grading button.
 
-## C. Rating semantics
+## C. Non-FSRS fallback
+
+If practical, use a reviewed card/deck without usable FSRS memory state.
+
+1. Confirm a card with at least 3 reviews and usable recent revlog history can still receive the neutral Oracle cue.
+2. Confirm no probability is shown before or after answer merely because the fallback was used.
+3. Confirm cards without sufficient history are simply skipped.
+
+## D. Rating semantics
 
 Exercise honest examples where practical:
 
@@ -45,23 +59,23 @@ Exercise honest examples where practical:
 
 Do not intentionally misgrade cards to make Oracle look correct.
 
-## D. Focus Mode
+## E. Focus Mode
 
 1. Enable Focus Mode.
-2. Reach another Oracle cadence boundary and answer an eligible card.
+2. Reach another Oracle-eligible card.
 3. Confirm normal review and Expedition progress continue.
-4. Confirm Oracle reveal is suppressed.
+4. Confirm both the neutral commitment cue and result reveal are suppressed.
 5. Disable Focus Mode and continue reviewing normally.
 
 PASS requires Focus Mode to change presentation only, not review or Oracle domain history.
 
-## E. Reduced Motion
+## F. Reduced Motion
 
 1. Enable Anki Alive Reduced Motion.
-2. Reach an Oracle reveal.
-3. Confirm the reveal remains understandable without requiring an animated transition.
+2. Reach an Oracle commitment and reveal.
+3. Confirm both states remain understandable without requiring animated transitions.
 
-## F. Undo / re-answer
+## G. Undo / re-answer
 
 1. Resolve an Oracle prediction by answering its card.
 2. Use Anki Undo for that review.
@@ -71,14 +85,14 @@ PASS requires Focus Mode to change presentation only, not review or Oracle domai
 
 The implementation must reuse the original commitment rather than rerolling a new prediction after Undo.
 
-## G. Expedition completion precedence
+## H. Expedition completion precedence
 
 If an Oracle-resolved review also completes the Expedition:
 
 1. Confirm Expedition closure remains the dominant event.
 2. Confirm Oracle does not interrupt or cover the completion stopping point.
 
-## H. Performance
+## I. Performance
 
 Use `Tools > Anki Alive Performance Snapshot` after enough samples.
 
@@ -99,11 +113,11 @@ max:
 
 Also note whether question display feels delayed when Oracle evaluates a candidate. If it does, treat that as a Phase 2 performance defect even if the accepted-answer timing remains low.
 
-## I. Restart continuity
+## J. Restart continuity
 
-1. Commit an Oracle prediction by displaying an eligible question.
+1. Reach a card showing `Prediction sealed`.
 2. If practical, leave/restart before answering without manufacturing unsafe collection state.
-3. Return to review and confirm user-visible truth is not rerolled.
+3. Return to review and confirm user-visible prediction truth is not rerolled.
 
 If the host makes this difficult to reproduce naturally, record the limitation rather than guessing.
 
@@ -114,8 +128,10 @@ Overall: PENDING
 Anki version:
 OS:
 FSRS enabled: yes/no
+Neutral commitment cue: PASS/FAIL
 No pre-answer leakage: PASS/FAIL
 Post-answer reveal: PASS/FAIL
+Non-FSRS fallback: PASS/FAIL / NOT EXERCISED
 Focus Mode: PASS/FAIL
 Reduced Motion: PASS/FAIL
 Undo/re-answer: PASS/FAIL
