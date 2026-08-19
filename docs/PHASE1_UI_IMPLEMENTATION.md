@@ -1,14 +1,14 @@
 # Phase 1 Expedition UI Implementation Notes
 
-Status: PRE-HOST VALIDATION
+Status: PRE-HOST RE-VALIDATION
 Phase: 1
 Feature: Expedition
 Canonical art direction: Arcane Memory Interface
 
 ## Purpose
 
-This note records the Phase 1 UI implementation decisions that must survive
-outside chat history. It is not the final Phase 1 handoff.
+This note records the current Phase 1 presentation decisions. It is not the
+final Phase 1 handoff.
 
 ## Canonical sources applied
 
@@ -25,12 +25,28 @@ The implementation treats these documents as constraints:
 - `docs/design/08_UI_REVIEW_CHECKLIST.md`
 - `docs/phases/PHASE_1_EXPEDITION.md`
 
-## UI slice
+## Host-surface decision
 
-### Today
+Real-host inspection with the Onigiri add-on showed that a full Today surface
+embedded in Anki's Deck Browser is too invasive. Deck Browser is a shared host
+surface and other add-ons legitimately customize it.
 
-The Anki Deck Browser WebView is augmented rather than replaced. Normal Anki
-navigation remains available if Anki Alive presentation fails.
+The current boundary is therefore:
+
+- Anki Alive does not inject Today into Deck Browser content.
+- Deck Browser remains owned by Anki and installed appearance/dashboard add-ons.
+- Native Decks / Add / Browse / Stats / Sync flows remain native and available.
+- Anki Alive Today opens in a dedicated modeless `AnkiWebView` window.
+- Today is reachable from an `Alive` top-toolbar entry and from
+  `Tools > Anki Alive Today`.
+- Reviewer presentation remains the only Phase 1 WebView augmentation.
+
+This avoids reimplementing Anki's main dashboard merely to preserve functionality
+that Anki already owns well.
+
+See `docs/PHASE1_ONIGIRI_HOST_NOTE.md` for the host finding.
+
+## Today
 
 Canonical components:
 
@@ -39,14 +55,16 @@ Canonical components:
 - `AA-CheckpointNode`
 - shared button, section, and empty-state anatomy
 
-Memory Core uses only the current real Anki review queue in Phase 1. It does not
-invent stability, fragility, health, or other Memory Engine meaning that does
-not yet exist.
+Memory Core uses only the real current Anki queue. It does not invent memory
+health, stability, fragility, or later-phase meaning.
 
-Today's Signals renders a truthful empty state. No Oracle, Rescue, Nemesis,
-Fragment, Relic, or World signal is fabricated before its phase exists.
+Today's Signals remains truthfully empty until a real implemented feature has a
+signal. No Oracle, Rescue, Nemesis, Fragment, Relic, or World signal is faked.
 
-### Reviewer
+The dedicated Today window has its own canvas stylesheet so its visual identity
+does not inherit arbitrary Deck Browser backgrounds or skin CSS.
+
+## Reviewer
 
 Canonical component:
 
@@ -67,9 +85,10 @@ Rules:
 Checkpoint feedback is a small non-blocking status cue after a real checkpoint
 transition.
 
-### Completion
+## Completion
 
-Completion leaves active recall and returns to the Deck Browser Today surface.
+Completion leaves active recall, returns Anki to a safe non-review state, and
+opens the dedicated Today window with the closure summary.
 
 Reasons:
 
@@ -79,9 +98,8 @@ Reasons:
 - completion does not manufacture another mandatory Expedition.
 
 Completion presentation state is durable and separate from Expedition domain
-state. A pending completion summary survives restart until dismissed. If undo
-reconciliation reopens the Expedition, the stale completion presentation is
-invalidated.
+state. A pending summary survives restart until dismissed. Undo reconciliation
+that reopens the Expedition invalidates stale completion presentation.
 
 ## Expedition visual DNA
 
@@ -126,7 +144,7 @@ No new effect family is introduced.
 
 ## Event orchestration
 
-Phase 1 includes the small central `EventOrchestrator` required by ADR-021.
+Phase 1 includes the central `EventOrchestrator` required by ADR-021.
 
 At one boundary:
 
@@ -145,41 +163,22 @@ Initial implementation policy:
 target = min(50, currently available review actions)
 ```
 
-This remains PROVISIONAL implementation policy, not a locked product formula.
-The locked constraints remain: positive target, bounded target, and no silent
-target growth after creation.
+This remains provisional. Locked constraints are positive target, bounded
+target, and no silent target growth after creation.
 
 ## Queue exhaustion
 
-A route may run out of eligible Anki reviews before reaching its fixed target.
-The implementation distinguishes this from a manual exit using Anki's reviewer
-lifecycle:
-
-- leaving review while a card still exists -> PAUSED,
-- reviewer cleanup after Anki has no next card -> COMPLETED due to queue exhaustion.
-
-The planned target does not change. If an Expedition planned for 50 reviews
-closes after 43 because Anki has no eligible reviews left, durable state remains:
-
-```text
-target_reviews = 50
-completed_reviews = 43
-status = COMPLETED
-```
-
-The completion copy explains the reason instead of pretending that the target
-was 43. Undo may make work eligible again; reconciliation can reopen the
-Expedition and invalidates stale completion presentation.
+Natural queue exhaustion before the fixed target closes the route truthfully.
+The target is not rewritten. Completion copy explains that available work ended.
+Undo can reopen the Expedition if host truth changes.
 
 ## Focus Mode and Reduced Motion
 
 Focus Mode keeps bounded progress, numeric meaning, and core actions while
-reducing ambient Memory Core geometry, glow, expressive transition, and reviewer
-strip weight. Domain behavior is identical.
+reducing ambient geometry and presentation weight. Domain behavior is identical.
 
-Both the explicit Anki Alive reduced-motion setting and
-`prefers-reduced-motion` are respected. Meaning never depends on animation
-order.
+Both explicit Anki Alive reduced-motion policy and `prefers-reduced-motion` are
+respected. Meaning never depends on animation order.
 
 ## Accessibility
 
@@ -191,104 +190,80 @@ Implemented before host validation:
 - `role="progressbar"` with ARIA values,
 - non-color checkpoint state labels,
 - `aria-live` checkpoint feedback,
-- pointer-transparent reviewer strip.
+- pointer-transparent reviewer strip,
+- Escape closes the dedicated Today window through AnkiWebView's bridge path.
 
-Real desktop keyboard and screen-reader-adjacent behavior still requires host
-validation.
+Real desktop keyboard behavior still requires host validation.
 
-## Contrast audit
+## Contrast and visual isolation
 
-Dark-mode Expedition amber on the main dark surface is comfortably readable.
-The original amber was too light for small text on the light surface, so light
-mode now uses a darker Expedition amber (`#80612c`) while preserving the same
-semantic family. The revised small-text contrast is above the intended readable
-threshold on the light surfaces used by Phase 1.
+Dark-mode Expedition amber remains restrained. Light mode uses the darker
+Expedition amber `#80612c` for readable small text.
+
+The dedicated Today window uses `today.css` for its canvas, which prevents an
+installed Deck Browser skin from becoming the accidental background of the
+Anki Alive visual system.
 
 ## Performance approach
 
 Reviewer UI updates:
 
 - no collection-wide scan,
-- compact sidecar Expedition lookup,
+- compact sidecar lookup,
 - presentation work scheduled after the review event,
 - one small DOM update call,
 - transform-based progress,
 - no JavaScript animation loop,
 - no canvas/WebGL/particle system.
 
-Measured Phase 1 reviewer overhead remains a real-host validation item.
-
-## Data hygiene
-
-Local sidecar SQLite files under `user_files/` are ignored by Git while
-`user_files/README.txt` remains tracked.
+Measured reviewer overhead remains a real-host validation item.
 
 ## Automated-validation status
 
-Automated test coverage includes:
+Automated coverage includes:
 
 - all four grades counting equally,
-- duplicate review suppression,
-- checkpoint transition uniqueness,
-- completion uniqueness,
+- duplicate suppression,
+- checkpoint/completion uniqueness,
 - undo reopening,
-- one resumable Expedition per profile,
 - bounded target planning,
-- EventOrchestrator prominence/dedupe,
-- Today and reviewer projections,
-- Focus Mode command path,
-- durable completion presentation after reopen,
-- stale completion invalidation after undo,
-- manual reviewer exit -> pause,
-- natural queue exhaustion -> truthful early closure,
-- quiet reviewer CSS/JS constraints.
+- durable completion presentation,
+- natural queue exhaustion,
+- Focus Mode,
+- quiet reviewer CSS/JS constraints,
+- dedicated Today rendering,
+- non-review WebViews remaining unmodified,
+- toolbar entry opening Today,
+- completion reopening the dedicated Today surface.
 
-GitHub Actions is configured for Python 3.9 and 3.13. Push-triggered runs are
-not exposed by the current connector, so CI was verified with a disposable
-draft pull-request probe based on the exact `main` snapshot
-`f58a060418790919a1f01895529ce0fa4afb4857`.
-
-Verification evidence:
+Host-compatibility CI evidence:
 
 ```text
 GitHub Actions workflow: Anki Alive CI
-Probe run: #95
+Probe run: #103
 Python 3.9 core-tests: PASS
 Python 3.13 core-tests: PASS
 Probe merged: no
-Probe branch after validation: reset to tested main snapshot
 ```
 
-The probe existed only to expose the same test workflow to the connector. The
-runtime and tests under validation were the `main` snapshot above; the probe's
-only temporary difference was a disposable text sentinel.
+The probe branch differed from `main` only by a disposable text sentinel and was
+closed without merge.
 
-The first probe run also caught a stale presentation assertion that expected the
-Today metric and label to be one contiguous string. Production intentionally
-renders the numeric metric and `reviews due` label as separate semantic spans.
-The assertion was corrected on `main`, then run #95 passed both Python versions.
+## Pre-host review status
 
-Automated CI is therefore PASS for the tested Phase 1 code snapshot. This does
-not replace the required desktop-Anki host validation.
+Overall status: NEEDS HOST RE-VALIDATION
 
-## Pre-host UI review
+The first real-host run successfully exposed the Deck Browser conflict and
+therefore did useful work. After the compatibility fix, verify:
 
-Overall status: NEEDS HOST INSPECTION
+- Onigiri/default Deck Browser is visually and functionally untouched,
+- `Alive` or `Tools > Anki Alive Today` opens the dedicated Today window,
+- Today dark/light presentation is coherent in its own window,
+- Begin/Resume closes Today and enters normal review,
+- reviewer strip remains calm and does not cover recall-critical content,
+- completion opens the dedicated Today summary,
+- keyboard, Focus Mode, reduced motion, restart recovery, queue exhaustion,
+  filtered/custom study, and reviewer performance still pass.
 
-No known canonical design blocker is intentionally accepted in code.
-
-Still required before visual acceptance:
-
-- real Anki screenshot inspection,
-- dark and light mode inspection,
-- narrow-window inspection,
-- Focus Mode inspection,
-- Reduced Motion inspection,
-- keyboard path inspection,
-- reviewer overlap check against real card layouts,
-- performance measurement,
-- completion/restart/continue flow validation,
-- filtered deck/custom study smoke test.
-
-Use `docs/PHASE1_MANUAL_VALIDATION.md` for the host run. The final Phase 1
-handoff must record actual evidence rather than claiming it in advance.
+Use `docs/PHASE1_MANUAL_VALIDATION.md` for the final real-host run. Phase 1 is
+not complete until that evidence is recorded and the handoff is created.
