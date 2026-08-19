@@ -70,11 +70,11 @@ class OracleReviewerRuntime:
             ):
                 return
 
-            # Sparse, deterministic cadence based on durable Expedition progress.
-            # The first eligible review may receive Oracle, then every fifth
-            # accepted review boundary. Candidate policy still decides whether
-            # enough memory evidence exists to make a prediction.
-            if expedition.completed_reviews % ORACLE_REVIEW_CADENCE != 0:
+            # One commitment per five accepted-review progress units, but use
+            # the first eligible card in each window instead of wasting the
+            # whole window when its first card lacks enough evidence.
+            allowed_commitments = expedition.completed_reviews // ORACLE_REVIEW_CADENCE + 1
+            if self._oracle.commitment_count(expedition.expedition_id) >= allowed_commitments:
                 return
 
             prediction = self._oracle.commit(
