@@ -258,19 +258,24 @@ Automated coverage includes:
 - completion reopening the dedicated Today surface,
 - responsive Today breakpoint reachability,
 - Today root overflow guard,
-- single-document Today reuse and delayed prewarm wiring.
+- single-document Today reuse and delayed prewarm wiring,
+- collection-independent hidden Today prewarm.
 
-Latest verified host-hardening CI before the latency/overflow patch:
+Latest latency/overflow patch CI evidence:
 
 ```text
 GitHub Actions workflow: Anki Alive CI
-Probe run: #110
+Probe run: #118
+Validated main snapshot: d4662fdc565357ca6d63c5bd493b38b6db5b0cf1
 Python 3.9 core-tests: PASS
 Python 3.13 core-tests: PASS
 Probe merged: no
 ```
 
-The latency/overflow patch requires a fresh CI probe before it can inherit PASS.
+The probe branch differed from the tested `main` snapshot only by a disposable
+text sentinel and was closed without merge. Automated validation is therefore
+PASS for the current Today reuse/prewarm and overflow implementation. Real-host
+perceived latency and layout still require desktop re-validation.
 
 ## Pre-host review status
 
