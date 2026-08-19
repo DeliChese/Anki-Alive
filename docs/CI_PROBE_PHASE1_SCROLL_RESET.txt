@@ -1,0 +1,1 @@
+temporary CI sentinel for Phase 1 Today scroll-reset validation
