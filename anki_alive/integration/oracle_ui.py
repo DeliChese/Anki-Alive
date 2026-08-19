@@ -76,13 +76,14 @@ class OracleUiRuntime:
             )
             if stored is None or stored.event.dedupe_key is None:
                 return
+            resolved_at = stored.created_at
 
             # Focus Mode changes presentation only; the resolved Oracle domain
             # record remains untouched.
             if self._settings.snapshot.focus_mode_enabled:
                 self._presentations.suppress(
                     stored.event.dedupe_key,
-                    at=event.resolved_at,
+                    at=resolved_at,
                 )
                 return
 
@@ -92,7 +93,7 @@ class OracleUiRuntime:
             if getattr(self._mw, "state", None) != "review":
                 self._presentations.suppress(
                     stored.event.dedupe_key,
-                    at=event.resolved_at,
+                    at=resolved_at,
                 )
                 return
 
@@ -109,7 +110,7 @@ class OracleUiRuntime:
             )
             self._presentations.mark_shown(
                 stored.event.dedupe_key,
-                at=event.resolved_at,
+                at=resolved_at,
             )
         except Exception as error:
             self._diagnostics.emit(
