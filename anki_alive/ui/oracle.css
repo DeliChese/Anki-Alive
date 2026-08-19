@@ -1,0 +1,44 @@
+.aa-oracle-reveal {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 40;
+  width: min(320px, calc(100vw - 36px));
+  padding: 12px 14px;
+  border: 1px solid var(--aa-line-subtle);
+  border-radius: var(--aa-radius-lg);
+  background: var(--aa-bg-elevated);
+  box-shadow: var(--aa-shadow-s2);
+  color: var(--aa-text-primary);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity var(--aa-time-2) var(--aa-ease-standard),
+    transform var(--aa-time-2) var(--aa-ease-standard);
+}
+
+.aa-oracle-reveal[data-visible="true"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.aa-oracle-reveal__label {
+  margin: 0 0 4px;
+  color: var(--aa-text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.aa-oracle-reveal__result {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.aa-oracle-reveal[data-reduced-motion="true"] {
+  transition: none;
+  transform: none;
+}
