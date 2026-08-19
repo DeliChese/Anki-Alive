@@ -61,3 +61,26 @@ def test_today_window_can_enter_responsive_breakpoint() -> None:
     assert "@media (max-width: 760px)" in today_css
     assert "@media (max-width: 760px)" in expedition_css
     assert "grid-template-columns: 1fr" in expedition_css
+    assert ".aa-today-window > .aa-today" in today_css
+    assert "box-sizing: border-box" in today_css
+    assert "max-width: 100%" in today_css
+
+
+def test_today_surface_reuses_one_web_document_and_is_prewarmed() -> None:
+    root = Path(__file__).parents[1]
+    window_source = (
+        root / "anki_alive" / "integration" / "today_window.py"
+    ).read_text(encoding="utf-8")
+    bootstrap_source = (root / "anki_alive" / "bootstrap.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert window_source.count("self._web.stdHtml(") == 1
+    assert "self._dialog.hide()" in window_source
+    assert "dialog_self.hide()" in window_source
+    assert "self._web.eval(" in window_source
+    assert "TODAY_PREWARM_DELAY_MS = 1200" in bootstrap_source
+    assert (
+        "QTimer.singleShot(TODAY_PREWARM_DELAY_MS, today_surface.prepare)"
+        in bootstrap_source
+    )

@@ -21,6 +21,9 @@ from anki_alive.settings import SettingsService
 from anki_alive.storage import Database
 
 
+TODAY_PREWARM_DELAY_MS = 1200
+
+
 @dataclass
 class AddonRuntime:
     module_name: str
@@ -30,11 +33,13 @@ class AddonRuntime:
     performance: PerformanceTimer
     hooks: AnkiHookRuntime
     expedition_ui: ExpeditionUiRuntime
+    today_surface: AnkiTodayWindow
     database: Database
     expedition: ExpeditionService
     presentations: PresentationRepository
 
     def close(self) -> None:
+        self.today_surface.shutdown()
         self.database.close()
 
 
@@ -162,6 +167,11 @@ def bootstrap(module_name: str) -> AddonRuntime:
     qconnect(tools_action.triggered, expedition_ui.show_today)
     mw.form.menuTools.addAction(tools_action)
 
+    # Warm the hidden WebEngine surface after normal startup has had time to
+    # settle. This moves Chromium/page setup out of the user's click path
+    # without blocking add-on bootstrap.
+    QTimer.singleShot(TODAY_PREWARM_DELAY_MS, today_surface.prepare)
+
     _runtime = AddonRuntime(
         module_name=module_name,
         event_bus=event_bus,
@@ -170,6 +180,7 @@ def bootstrap(module_name: str) -> AddonRuntime:
         performance=performance,
         hooks=hooks,
         expedition_ui=expedition_ui,
+        today_surface=today_surface,
         database=database,
         expedition=expedition,
         presentations=presentations,
