@@ -43,6 +43,9 @@ class OracleService:
         self.presentation_repository = presentation_repository
         self.orchestrator = orchestrator
 
+    def commitment_count(self, expedition_id: UUID) -> int:
+        return self.repository.count_for_expedition(expedition_id)
+
     def commit(
         self,
         *,
