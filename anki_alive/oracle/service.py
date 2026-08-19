@@ -84,17 +84,6 @@ class OracleService:
         if resolved.result is None or resolved.actual_recall_success is None or resolved.actual_rating is None:
             raise RuntimeError("resolved Oracle prediction is missing outcome fields")
 
-        domain_event = OracleResolved(
-            oracle_prediction_id=resolved.oracle_prediction_id,
-            expedition_id=resolved.expedition_id,
-            card_id=resolved.card_id,
-            predicted_outcome=resolved.predicted_outcome,
-            actual_recall_success=resolved.actual_recall_success,
-            actual_rating=resolved.actual_rating,
-            result=resolved.result,
-        )
-        self.event_bus.publish(domain_event)
-
         presentation = self._presentation_event(resolved)
         if self.presentation_repository is not None:
             self.presentation_repository.enqueue(
@@ -104,6 +93,21 @@ class OracleService:
             )
         if self.orchestrator is not None:
             self.orchestrator.enqueue(presentation)
+
+        # Publish only after durable presentation state exists. UI subscribers
+        # may schedule asynchronously or execute immediately in tests; either
+        # way they can now resolve the reveal by dedupe key safely.
+        self.event_bus.publish(
+            OracleResolved(
+                oracle_prediction_id=resolved.oracle_prediction_id,
+                expedition_id=resolved.expedition_id,
+                card_id=resolved.card_id,
+                predicted_outcome=resolved.predicted_outcome,
+                actual_recall_success=resolved.actual_recall_success,
+                actual_rating=resolved.actual_rating,
+                result=resolved.result,
+            )
+        )
 
     def on_review_reversed(self, reversal: ReviewReversed) -> None:
         prediction = self.repository.resolved_for_reversal(reversal)
